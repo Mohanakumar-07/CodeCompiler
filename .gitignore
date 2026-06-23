@@ -1,0 +1,21 @@
+# Python
+backend/.venv/
+__pycache__/
+*.pyc
+backend/.env
+backend/*.db
+backend/server.log
+backend/server.err
+
+# Node / frontend
+frontend/node_modules/
+frontend/dist/
+frontend/vite.log
+frontend/vite.err
+
+# Reference project (kept locally for cross-reference, not part of this repo)
+_reference_python_platform/
+
+# OS / editor
+.DS_Store
+Thumbs.db
