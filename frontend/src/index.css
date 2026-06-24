@@ -393,3 +393,72 @@ body {
 
 /* ── Fullscreen proctoring ──────────────────────────────────────────────── */
 .fullscreen-mode { position: fixed !important; inset: 0 !important; z-index: 9999; background: var(--beige-pg); }
+
+/* ── Server status badge (Topbar) ──────────────────────────────────────── */
+.server-badge {
+  @apply inline-flex items-center gap-1.5;
+  padding: 3px 10px 3px 7px; border-radius: var(--r-full);
+  font: 600 10px/1 var(--sans); letter-spacing: 0.03em; text-transform: uppercase;
+  transition: all var(--t-base) var(--ease);
+  cursor: default; user-select: none;
+}
+.server-badge--online {
+  background: rgba(61,214,140,0.12); color: var(--ok);
+  border: 1px solid rgba(61,214,140,0.20);
+}
+.server-badge--offline {
+  background: rgba(240,101,96,0.12); color: var(--err);
+  border: 1px solid rgba(240,101,96,0.25);
+  animation: offlinePulse 2s ease-in-out infinite;
+}
+.server-badge--checking {
+  background: var(--sh); color: var(--t4);
+  border: 1px solid var(--b);
+}
+.server-dot {
+  width: 7px; height: 7px; border-radius: var(--r-full); flex-shrink: 0;
+}
+.server-dot--online {
+  background: var(--ok);
+  box-shadow: 0 0 6px rgba(61,214,140,0.55);
+  animation: dotPulse 2s ease-in-out infinite;
+}
+.server-dot--checking {
+  background: var(--t4);
+  animation: dotPulse 1s ease-in-out infinite;
+}
+.server-label { white-space: nowrap; }
+.server-badge-icon { flex-shrink: 0; }
+
+@keyframes dotPulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50%      { opacity: .55; transform: scale(0.85); }
+}
+@keyframes offlinePulse {
+  0%, 100% { border-color: rgba(240,101,96,0.25); }
+  50%      { border-color: rgba(240,101,96,0.55); }
+}
+
+/* ── Server offline banner (Login) ─────────────────────────────────────── */
+.server-banner {
+  width: 100%; padding: 0 1rem;
+  animation: bannerSlideDown 0.35s var(--ease);
+}
+.server-banner-inner {
+  @apply flex items-start gap-3;
+  max-width: 28rem; margin: 0 auto;
+  background: rgba(240,101,96,0.10); border: 1px solid rgba(240,101,96,0.25);
+  border-radius: var(--r-lg); padding: 12px 16px;
+}
+.server-banner-icon { color: var(--err); flex-shrink: 0; margin-top: 2px; }
+.server-banner-title {
+  font: 600 13px/1.3 var(--sans); color: var(--err);
+}
+.server-banner-desc {
+  font: 400 12px/1.5 var(--sans); color: var(--t3); margin-top: 2px;
+}
+
+@keyframes bannerSlideDown {
+  from { opacity: 0; transform: translateY(-8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}

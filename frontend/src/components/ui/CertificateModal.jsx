@@ -1,4 +1,5 @@
 import { useRef } from 'react'
+import { createPortal } from 'react-dom'
 import { jsPDF } from 'jspdf'
 import { X, Download, FileText } from 'lucide-react'
 import toast from 'react-hot-toast'
@@ -52,7 +53,7 @@ export default function CertificateModal({ open, onClose, name, solved, avgScore
     } catch { toast.error('Could not generate PDF') }
   }
 
-  return (
+  return createPortal(
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(4px)' }} onClick={onClose}>
       <div className="w-full max-w-4xl" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between mb-3">
@@ -115,6 +116,7 @@ export default function CertificateModal({ open, onClose, name, solved, avgScore
           </svg>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   )
 }

@@ -1,5 +1,6 @@
 import { X } from 'lucide-react'
 import { useEffect } from 'react'
+import { createPortal } from 'react-dom'
 
 export default function Modal({ open, onClose, title, children, size = 'md' }) {
   useEffect(() => {
@@ -18,7 +19,7 @@ export default function Modal({ open, onClose, title, children, size = 'md' }) {
     full: 'max-w-[95vw]',
   }[size] || 'max-w-2xl'
 
-  return (
+  return createPortal(
     <div className="modal-overlay" onClick={onClose}>
       <div className={`modal-box ${sizeClass}`} onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between mb-5">
@@ -33,6 +34,7 @@ export default function Modal({ open, onClose, title, children, size = 'md' }) {
         </div>
         {children}
       </div>
-    </div>
+    </div>,
+    document.body
   )
 }

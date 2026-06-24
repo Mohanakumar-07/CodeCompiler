@@ -5,6 +5,8 @@ import toast from 'react-hot-toast'
 import api from '../../api/client'
 import { useAuth } from '../../context/AuthContext'
 import AuthShell from '../../components/ui/AuthShell'
+import { ServerOfflineBanner } from '../../components/ui/ServerStatusBadge'
+import useBackendStatus from '../../hooks/useBackendStatus'
 
 export default function Login() {
   const { login } = useAuth()
@@ -12,6 +14,7 @@ export default function Login() {
   const [form, setForm]       = useState({ username: '', password: '' })
   const [showPw, setShowPw]   = useState(false)
   const [loading, setLoading] = useState(false)
+  const { online } = useBackendStatus()
 
   const submit = async (e) => {
     e.preventDefault()
@@ -30,7 +33,8 @@ export default function Login() {
 
   return (
     <AuthShell>
-      <div className="card">
+      <ServerOfflineBanner online={online} />
+      <div className="card" style={{ marginTop: online === false ? '12px' : undefined }}>
         <h2 className="h2">Sign in</h2>
         <p className="section-sub mb-6 mt-0.5">Enter your credentials to continue</p>
 
@@ -68,7 +72,7 @@ export default function Login() {
             </div>
           </div>
 
-          <button type="submit" disabled={loading} className="btn-primary w-full mt-1 h-11">
+          <button type="submit" disabled={loading || online === false} className="btn-primary w-full mt-1 h-11">
             <LogIn size={16} />
             {loading ? 'Signing in…' : 'Sign in'}
           </button>
@@ -84,3 +88,4 @@ export default function Login() {
     </AuthShell>
   )
 }
+

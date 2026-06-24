@@ -1,6 +1,8 @@
 import { CheckCircle2 } from 'lucide-react'
 import { LogoMark } from './Logo'
 import ThemeToggle from './ThemeToggle'
+import ServerStatusBadge from './ServerStatusBadge'
+import useBackendStatus from '../../hooks/useBackendStatus'
 
 const FEATURES = [
   'Write, run & submit in Python, Java, C++ or C',
@@ -10,6 +12,7 @@ const FEATURES = [
 ]
 
 export default function AuthShell({ children }) {
+  const { online, checking } = useBackendStatus()
   return (
     <div className="min-h-screen flex bg-beige-pg">
       {/* Brand panel */}
@@ -48,7 +51,10 @@ export default function AuthShell({ children }) {
 
       {/* Form panel */}
       <div className="flex-1 flex items-center justify-center px-4 py-10 relative">
-        <div className="absolute top-4 right-4"><ThemeToggle /></div>
+        <div className="absolute top-4 right-4 flex items-center gap-3">
+          <ServerStatusBadge online={online} checking={checking} />
+          <ThemeToggle />
+        </div>
         <div className="w-full max-w-md animate-fade-in">
           {/* compact brand for small screens (brand panel hidden) */}
           <div className="lg:hidden flex flex-col items-center mb-8">

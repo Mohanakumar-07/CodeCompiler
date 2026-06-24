@@ -2,10 +2,13 @@ import { PanelLeft, HelpCircle } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 import ThemeToggle from './ui/ThemeToggle'
 import Breadcrumb from './ui/Breadcrumb'
+import ServerStatusBadge from './ui/ServerStatusBadge'
+import useBackendStatus from '../hooks/useBackendStatus'
 
 export default function Topbar({ onMenuClick, onTour }) {
   const { user } = useAuth()
   const initial = (user?.full_name || user?.username || '?')[0].toUpperCase()
+  const { online, checking } = useBackendStatus()
 
   return (
     <header className="flex items-center justify-between gap-3 h-12 px-4 lg:px-6 flex-shrink-0 bg-surface border-b border-line">
@@ -21,8 +24,9 @@ export default function Topbar({ onMenuClick, onTour }) {
         <Breadcrumb />
       </div>
 
-      {/* Right: tour + theme + user */}
+      {/* Right: status + tour + theme + user */}
       <div className="flex items-center gap-2">
+        <ServerStatusBadge online={online} checking={checking} />
         {onTour && (
           <button onClick={onTour} title="Take a guided tour"
             className="inline-flex items-center justify-center w-8 h-8 rounded-lg text-t3 hover:text-brand hover:bg-surface-h transition-colors">
@@ -49,3 +53,4 @@ export default function Topbar({ onMenuClick, onTour }) {
     </header>
   )
 }
+
