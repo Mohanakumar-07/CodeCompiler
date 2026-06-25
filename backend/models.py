@@ -336,3 +336,50 @@ class Challenge(Base):
     explanation = Column(Text, default="")              # revealed after answering
     is_active = Column(Boolean, default=True)
     created_at = Column(DateTime, default=datetime.datetime.utcnow)
+
+
+# ──────────────────────────── Exams (multi-question tests) ─────────────────
+# An Exam groups multiple Problems into one timed test session.
+# Students see it as a single card → enter → navigate Q1, Q2, Q3 … with one timer.
+
+class Exam(Base):
+    """A proctored exam that bundles several Problems into one timed session."""
+    __tablename__ = "exams"
+
+    id          = Column(Integer, primary_key=True, index=True)
+    title       = Column(String(200), nullable=False)
+    description = Column(Text)
+    duration    = Column(Integer)                       # total minutes for the exam
+    start_time  = Column(DateTime)
+    end_time    = Column(DateTime)
+    is_active   = Column(Boolean, default=True)
+    is_for_all  = Column(Boolean, default=True)
+    created_by  = Column(Integer, ForeignKey("users.id"))
+    created_at  = Column(DateTime, default=datetime.datetime.utcnow)
+
+    # Proctoring flags
+    tab_switch_detect   = Column(Boolean, default=False)
+    copy_paste_disable  = Column(Boolean, default=False)
+    f12_disable         = Column(Boolean, default=False)
+    fullscreen_required = Column(Boolean, default=False)
+    window_switch_detect= Column(Boolean, default=False)
+    block_paste         = Column(Boolean, default=False)
+
+    problems = relationship(
+        "ExamProblem", back_populates="exam", cascade="all, delete-orphan",
+        order_by="ExamProblem.order_index",
+    )
+    creator  = relationship("User", foreign_keys=[created_by])
+
+
+class ExamProblem(Base):
+    """Join table: which Problems belong to an Exam and in what order."""
+    __tablename__ = "exam_problems"
+
+    id          = Column(Integer, primary_key=True, index=True)
+    exam_id     = Column(Integer, ForeignKey("exams.id",    ondelete="CASCADE"), index=True)
+    problem_id  = Column(Integer, ForeignKey("problems.id", ondelete="CASCADE"), index=True)
+    order_index = Column(Integer, default=0)
+
+    exam    = relationship("Exam",    back_populates="problems")
+    problem = relationship("Problem")

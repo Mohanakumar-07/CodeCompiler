@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { FlaskConical, Clock, ArrowRight, Lock, ShieldCheck, AlertTriangle } from 'lucide-react'
+import { FlaskConical, Clock, ArrowRight, Lock, ShieldCheck, AlertTriangle, BookOpen } from 'lucide-react'
 import { format, isPast, isFuture } from 'date-fns'
 import api from '../../api/client'
 import { PageLoader } from '../../components/ui/LoadingSpinner'
@@ -18,6 +18,7 @@ function TestStatusBadge({ problem }) {
 
 export default function StudentTestMode() {
   const [problems, setProblems] = useState([])
+  const [exams, setExams]       = useState([])
   const [subs, setSubs]         = useState({})
   const [loading, setLoading]   = useState(true)
   const navigate = useNavigate()
@@ -26,8 +27,10 @@ export default function StudentTestMode() {
     Promise.all([
       api.get('/problems?mode=test'),
       api.get('/submissions'),
-    ]).then(([pRes, sRes]) => {
+      api.get('/exams'),
+    ]).then(([pRes, sRes, eRes]) => {
       setProblems(pRes.data)
+      setExams(eRes.data)
       const map = {}
       sRes.data.forEach((s) => {
         if (!map[s.problem_id] || new Date(s.submitted_at) > new Date(map[s.problem_id].submitted_at))
@@ -58,11 +61,74 @@ export default function StudentTestMode() {
         </div>
       </div>
 
-      {problems.length > 0 && (
-        <CountBar stats={[{ label: 'Total', count: problems.length }, ...diffStats(problems)]} />
+      {/* ── Exams (multi-question bundles) ─────────────────────────────── */}
+      {exams.length > 0 && (
+        <div>
+          <h2 className="h2 mb-3 flex items-center gap-2">
+            <BookOpen size={18} style={{ color: 'var(--d-purple)' }} /> Exams
+          </h2>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            {exams.map(exam => {
+              const now = new Date()
+              const canEnter = !exam.end_time || !isPast(new Date(exam.end_time))
+              const isUpcoming = exam.start_time && isFuture(new Date(exam.start_time))
+              return (
+                <div key={exam.id} className="card-hover flex flex-col">
+                  <div className="flex items-start justify-between mb-2">
+                    <h3 className="h3 line-clamp-2 flex-1 pr-2">{exam.title}</h3>
+                    {isUpcoming
+                      ? <span className="badge-yellow badge">Upcoming</span>
+                      : canEnter
+                        ? <span className="badge-green badge">Active</span>
+                        : <span className="badge-violet badge">Ended</span>}
+                  </div>
+
+                  {exam.description && (
+                    <p className="text-xs text-t3 mb-2 line-clamp-2">{exam.description}</p>
+                  )}
+
+                  <div className="flex flex-wrap gap-1.5 mb-3">
+                    <span className="badge badge-violet tabular">{exam.problem_count} question{exam.problem_count !== 1 ? 's' : ''}</span>
+                    {exam.duration && <span className="badge badge-cyan flex items-center gap-1"><Clock size={10} />{exam.duration}m</span>}
+                    {exam.fullscreen_required && <span className="badge badge-violet"><Lock size={10} /> Fullscreen</span>}
+                    {exam.tab_switch_detect   && <span className="badge badge-yellow"><AlertTriangle size={10} /> Tab Monitor</span>}
+                  </div>
+
+                  {exam.start_time && (
+                    <p className="text-xs text-t4 mb-1 tabular">
+                      Starts: {format(new Date(exam.start_time), 'MMM d, HH:mm')}
+                    </p>
+                  )}
+                  {exam.end_time && (
+                    <p className="text-xs text-t4 mb-2 tabular">
+                      Ends: {format(new Date(exam.end_time), 'MMM d, HH:mm')}
+                    </p>
+                  )}
+
+                  <button
+                    onClick={() => canEnter && !isUpcoming && navigate(`/exam/${exam.id}`)}
+                    disabled={!canEnter || isUpcoming}
+                    className={`mt-auto justify-center text-sm ${canEnter && !isUpcoming ? 'btn-primary' : 'btn-secondary opacity-50 cursor-not-allowed'}`}
+                  >
+                    {!canEnter ? <><Lock size={13} /> Closed</> : isUpcoming ? <><Clock size={13} /> Upcoming</> : <>Enter Exam <ArrowRight size={13} /></>}
+                  </button>
+                </div>
+              )
+            })}
+          </div>
+        </div>
       )}
 
-      {problems.length === 0 ? (
+      {/* ── Individual Tests ───────────────────────────────────────────── */}
+      {problems.length > 0 && (
+        <div>
+          <h2 className="h2 mb-3">Individual Tests</h2>
+          <CountBar stats={[{ label: 'Total', count: problems.length }, ...diffStats(problems)]} />
+        </div>
+      )}
+
+
+      {exams.length === 0 && problems.length === 0 ? (
         <div className="card text-center py-16">
           <FlaskConical size={40} className="mx-auto text-t4 mb-3" />
           <p className="text-t3">No tests available.</p>

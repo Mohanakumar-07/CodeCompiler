@@ -8,7 +8,7 @@ from fastapi.staticfiles import StaticFiles
 import monitoring
 from database import Base, engine
 from routers import (
-    admin, ai_router, analytics, auth, problems, reports,
+    admin, ai_router, analytics, auth, exams, problems, reports,
     students, submissions,
 )
 
@@ -43,6 +43,33 @@ def _lightweight_migrate():
         "ALTER TABLE problems ADD COLUMN starter_code_map TEXT",
         "ALTER TABLE problems ADD COLUMN allowed_languages TEXT",
         "ALTER TABLE problems ADD COLUMN time_limit_sec INT DEFAULT 5",
+        # Exam tables (safe no-op if already exist in MySQL)
+        """CREATE TABLE IF NOT EXISTS exams (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            title VARCHAR(200) NOT NULL,
+            description TEXT,
+            duration INT,
+            start_time DATETIME,
+            end_time DATETIME,
+            is_active BOOLEAN DEFAULT TRUE,
+            is_for_all BOOLEAN DEFAULT TRUE,
+            created_by INT,
+            created_at DATETIME,
+            tab_switch_detect BOOLEAN DEFAULT FALSE,
+            copy_paste_disable BOOLEAN DEFAULT FALSE,
+            f12_disable BOOLEAN DEFAULT FALSE,
+            fullscreen_required BOOLEAN DEFAULT FALSE,
+            window_switch_detect BOOLEAN DEFAULT FALSE,
+            block_paste BOOLEAN DEFAULT FALSE
+        )""",
+        """CREATE TABLE IF NOT EXISTS exam_problems (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            exam_id INT,
+            problem_id INT,
+            order_index INT DEFAULT 0,
+            INDEX idx_ep_exam (exam_id),
+            INDEX idx_ep_problem (problem_id)
+        )""",
     ]
     with engine.begin() as conn:
         for s in stmts:
@@ -138,6 +165,7 @@ app.include_router(reports.router,     prefix="/api/reports",     tags=["Reports
 app.include_router(students.router,    prefix="/api/students",    tags=["Students"])
 app.include_router(ai_router.router,   prefix="/api/ai",          tags=["AI"])
 app.include_router(analytics.router,   prefix="/api/analytics",   tags=["Analytics"])
+app.include_router(exams.router,       prefix="/api/exams",        tags=["Exams"])
 
 
 @app.get("/api/health/runtimes")
