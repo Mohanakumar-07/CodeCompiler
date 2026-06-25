@@ -85,6 +85,16 @@ export default function CodingEnvironment() {
   const { isDark } = useTheme()
   const { user } = useAuth()
 
+  const isConfirmingRef = useRef(false)
+  const [timerStarted, setTimerStarted] = useState(() => {
+    if (!isTestMode) return true
+    try {
+      return !!localStorage.getItem(`cf_teststart_${problemId}`)
+    } catch {
+      return false
+    }
+  })
+
   const [problem, setProblem]         = useState(null)
   const [allProblems, setAllProblems] = useState([])
   const [loading, setLoading]         = useState(true)
@@ -96,7 +106,15 @@ export default function CodingEnvironment() {
   const [result, setResult]           = useState(null)
   const [activeTab, setActiveTab]     = useState('statement')
   const [timer, setTimer]             = useState(0)
-  const [tabSwitches, setTabSwitches] = useState(0)
+  const [tabSwitches, setTabSwitches] = useState(() => {
+    if (!isTestMode) return 0
+    try {
+      const stored = localStorage.getItem(`cf_test_tabs_${problemId}`)
+      return stored ? parseInt(stored, 10) : 0
+    } catch {
+      return 0
+    }
+  })
   const [isFullscreen, setIsFullscreen] = useState(false)
   const [customInputOpen, setCustomInputOpen] = useState(true)
   const [runMode, setRunMode]         = useState('samples') // 'samples' | 'console'
@@ -240,6 +258,15 @@ export default function CodingEnvironment() {
   // On phones, a finished submission lives in the left "Result" tab — surface it.
   useEffect(() => { if (showResult) setMobileView('problem') }, [showResult])
 
+  // Sync tabSwitches to localStorage in test mode
+  useEffect(() => {
+    if (isTestMode && problemId) {
+      try {
+        localStorage.setItem(`cf_test_tabs_${problemId}`, String(tabSwitches))
+      } catch { /* ignore */ }
+    }
+  }, [tabSwitches, isTestMode, problemId])
+
   // While in a test, send a heartbeat (with violations + run count) so admins see live status.
   const runsRef = useRef(0)
   useEffect(() => {
@@ -306,15 +333,16 @@ export default function CodingEnvironment() {
 
   useEffect(() => {
     if (!problem) return
+    if (isTestMode && !timerStarted) return
     timerRef.current = setInterval(() => {
       setTimer(Math.floor((Date.now() - startTimeRef.current) / 1000))
     }, 1000)
     return () => clearInterval(timerRef.current)
-  }, [problem])
+  }, [problem, isTestMode, timerStarted])
 
   // Timed test: persist the start so a refresh / disconnect resumes the SAME clock
   useEffect(() => {
-    if (!problem || !isTestMode || !problem.duration) return
+    if (!problem || !isTestMode || !problem.duration || !timerStarted) return
     const key = `cf_teststart_${problemId}`
     let start = null
     try { const s = localStorage.getItem(key); if (s) start = parseInt(s, 10) } catch { /* ignore */ }
@@ -324,6 +352,19 @@ export default function CodingEnvironment() {
     }
     startTimeRef.current = start
     setTimer(Math.floor((Date.now() - start) / 1000))
+  }, [problem, isTestMode, problemId, timerStarted])
+
+  // Initialize timerStarted if fullscreen not required or already started
+  useEffect(() => {
+    if (!problem || !isTestMode) return
+    const key = `cf_teststart_${problemId}`
+    const hasStored = !!localStorage.getItem(key)
+    if (!problem.fullscreen_required || hasStored || document.fullscreenElement) {
+      if (!hasStored) {
+        localStorage.setItem(key, String(Date.now()))
+      }
+      setTimerStarted(true)
+    }
   }, [problem, isTestMode, problemId])
 
   // Auto-submit once the time limit is reached (fires once)
@@ -400,6 +441,15 @@ export default function CodingEnvironment() {
       if (document.fullscreenElement) {
         setShowFullscreenOverlay(false)
         setIsFullscreen(true)
+        if (!timerStarted) {
+          const key = `cf_teststart_${problemId}`
+          try {
+            if (!localStorage.getItem(key)) {
+              localStorage.setItem(key, String(Date.now()))
+            }
+          } catch { /* ignore */ }
+          setTimerStarted(true)
+        }
       } else if (problem.fullscreen_required) {
         setShowFullscreenOverlay(true)
         setIsFullscreen(false)
@@ -409,11 +459,12 @@ export default function CodingEnvironment() {
     }
     
     document.addEventListener('fullscreenchange', onFullscreenChange)
-
+ 
     const cleanups = [() => document.removeEventListener('fullscreenchange', onFullscreenChange)]
-
+ 
     if (problem.tab_switch_detect) {
       const onVisibility = () => {
+        if (isConfirmingRef.current) return
         if (document.hidden) {
           setTabSwitches(prev => {
             const next = prev + 1
@@ -425,13 +476,14 @@ export default function CodingEnvironment() {
       document.addEventListener('visibilitychange', onVisibility)
       cleanups.push(() => document.removeEventListener('visibilitychange', onVisibility))
     }
-
+ 
     if (problem.window_switch_detect) {
       // Window lost focus — student switched to another app/window (Alt-Tab,
       // clicked outside the browser). Delay the check so a plain tab switch
       // (already counted via visibilitychange) doesn't get counted twice.
       let blurTimer = null
       const onBlur = () => {
+        if (isConfirmingRef.current) return
         blurTimer = setTimeout(() => {
           if (document.hidden) return  // it was a tab switch, not a window switch
           setTabSwitches(prev => {
@@ -450,19 +502,23 @@ export default function CodingEnvironment() {
         if (blurTimer) clearTimeout(blurTimer)
       })
     }
-
+ 
     return () => cleanups.forEach(fn => fn())
-  }, [problem, isTestMode])
-
+  }, [problem, isTestMode, timerStarted, problemId])
+ 
   useEffect(() => {
     if (!isTestMode || !problem) return
     const onKeyDown = (e) => {
-      if (problem.f12_disable && e.key === 'F12') {
-        e.preventDefault()
-        e.stopPropagation()
-        toast.error('Developer tools are disabled during this test.')
-      }
       const key = e.key.toLowerCase()
+      if (problem.f12_disable) {
+        if (e.key === 'F12' || 
+            ((e.ctrlKey || e.metaKey) && e.shiftKey && (key === 'i' || key === 'j' || key === 'c')) ||
+            ((e.ctrlKey || e.metaKey) && (key === 'u' || key === 's'))) {
+          e.preventDefault()
+          e.stopPropagation()
+          toast.error('Developer tools and source viewing are disabled during this test.')
+        }
+      }
       if (problem.copy_paste_disable && (e.ctrlKey || e.metaKey) && key === 'c') {
         e.preventDefault()
         e.stopPropagation()
@@ -491,16 +547,44 @@ export default function CodingEnvironment() {
         e.stopPropagation()
       }
     }
+    const handleDragOver = (e) => {
+      if (problem.copy_paste_disable || problem.block_paste) {
+        e.preventDefault()
+      }
+    }
+    const handleDrop = (e) => {
+      if (problem.copy_paste_disable || problem.block_paste) {
+        e.preventDefault()
+        e.stopPropagation()
+        toast.error('Drag and drop is disabled during this test.')
+      }
+    }
     document.addEventListener('keydown', onKeyDown, true)
     document.addEventListener('copy', onCopyPaste, true)
     document.addEventListener('paste', onCopyPaste, true)
     document.addEventListener('contextmenu', onContext, true)
+    document.addEventListener('dragover', handleDragOver, true)
+    document.addEventListener('drop', handleDrop, true)
     return () => {
       document.removeEventListener('keydown', onKeyDown, true)
       document.removeEventListener('copy', onCopyPaste, true)
       document.removeEventListener('paste', onCopyPaste, true)
       document.removeEventListener('contextmenu', onContext, true)
+      document.removeEventListener('dragover', handleDragOver, true)
+      document.removeEventListener('drop', handleDrop, true)
     }
+  }, [problem, isTestMode])
+ 
+  // Auto-enter fullscreen on any click/gesture if required and not in fullscreen
+  useEffect(() => {
+    if (!problem?.fullscreen_required || !isTestMode) return
+    const handleDocumentClick = () => {
+      if (!document.fullscreenElement) {
+        document.documentElement.requestFullscreen?.().catch(() => {})
+      }
+    }
+    document.addEventListener('click', handleDocumentClick)
+    return () => document.removeEventListener('click', handleDocumentClick)
   }, [problem, isTestMode])
 
   useEffect(() => {

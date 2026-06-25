@@ -40,12 +40,28 @@ export default function TestEnvironment() {
   const { isDark }  = useTheme()
   const { user }    = useAuth()
 
+  const isConfirmingRef = useRef(false)
+
   const [test, setTest]         = useState(null)
   const [loading, setLoading]   = useState(true)
   const [qIdx, setQIdx]         = useState(0)    // current question index
   const [code, setCode]         = useState(DEFAULT_CODE)
   const [timeLeft, setTimeLeft] = useState(null) // seconds
-  const [tabSwitches, setTabSwitches] = useState(0)
+  const [timerStarted, setTimerStarted] = useState(() => {
+    try {
+      return !!localStorage.getItem(`test_start_${testId}`)
+    } catch {
+      return false
+    }
+  })
+  const [tabSwitches, setTabSwitches] = useState(() => {
+    try {
+      const stored = localStorage.getItem(`test_tabs_${testId}`)
+      return stored ? parseInt(stored, 10) : 0
+    } catch {
+      return 0
+    }
+  })
   const [isFullscreen, setIsFullscreen] = useState(false)
 
   const [running, setRunning]       = useState(false)
@@ -57,11 +73,38 @@ export default function TestEnvironment() {
   const timerRef  = useRef(null)
   const startRef  = useRef(null)  // when test session started (ms)
 
+  // Sync tabSwitches to localStorage
+  useEffect(() => {
+    if (testId) {
+      try {
+        localStorage.setItem(`test_tabs_${testId}`, String(tabSwitches))
+      } catch { /* ignore */ }
+    }
+  }, [tabSwitches, testId])
+
   // ── Load test ───────────────────────────────────────────────────────────
   useEffect(() => {
+    if (localStorage.getItem(`test_completed_${testId}`) === 'true') {
+      toast.error('You have already completed this test.')
+      navigate('/student/dashboard', { replace: true })
+      return
+    }
+
     api.get(`/tests/${testId}`)
       .then(({ data }) => {
         setTest(data)
+        
+        const key = `test_start_${testId}`
+        const hasStored = !!localStorage.getItem(key)
+        if (!data.fullscreen_required || hasStored || document.fullscreenElement) {
+          if (!hasStored) {
+            localStorage.setItem(key, String(Date.now()))
+          }
+          setTimerStarted(true)
+        } else {
+          setTimeLeft(data.duration * 60)
+        }
+
         // Restore or initialise code for first question
         const firstPid = data.problems?.[0]?.id
         if (firstPid) {
@@ -90,15 +133,10 @@ export default function TestEnvironment() {
 
   // ── Timer ────────────────────────────────────────────────────────────────
   useEffect(() => {
-    if (!test?.duration) return
+    if (!test?.duration || !timerStarted) return
     const stored = localStorage.getItem(`test_start_${testId}`)
-    let startMs
-    if (stored) {
-      startMs = parseInt(stored, 10)
-    } else {
-      startMs = Date.now()
-      localStorage.setItem(`test_start_${testId}`, String(startMs))
-    }
+    if (!stored) return
+    const startMs = parseInt(stored, 10)
     startRef.current = startMs
 
     const totalSec = test.duration * 60
@@ -114,25 +152,68 @@ export default function TestEnvironment() {
     tick()
     timerRef.current = setInterval(tick, 1000)
     return () => clearInterval(timerRef.current)
-  }, [test])
+  }, [test, testId, timerStarted])
 
   // ── Proctoring: tab switch & copying/devtools disable ────────────────────
   useEffect(() => {
     if (!test) return
 
-    const handleBlur = () => {
-      if (test.tab_switch_detect) {
-        setTabSwitches(n => n + 1)
+    const cleanups = []
+
+    if (test.tab_switch_detect) {
+      const onVisibility = () => {
+        if (isConfirmingRef.current) return
+        if (document.hidden) {
+          setTabSwitches(prev => {
+            const next = prev + 1
+            toast.error(`Tab switch detected! (${next})`, { duration: 4000 })
+            return next
+          })
+        }
       }
+      document.addEventListener('visibilitychange', onVisibility)
+      cleanups.push(() => document.removeEventListener('visibilitychange', onVisibility))
+    }
+
+    if (test.window_switch_detect) {
+      let blurTimer = null
+      const onBlur = () => {
+        if (isConfirmingRef.current) return
+        blurTimer = setTimeout(() => {
+          if (document.hidden) return // it was a tab switch, not a window switch
+          setTabSwitches(prev => {
+            const next = prev + 1
+            toast.error(`Window switch detected! (${next})`, { duration: 4000 })
+            return next
+          })
+        }, 200)
+      }
+      const onFocus = () => {
+        if (blurTimer) {
+          clearTimeout(blurTimer)
+          blurTimer = null
+        }
+      }
+      window.addEventListener('blur', onBlur)
+      window.addEventListener('focus', onFocus)
+      cleanups.push(() => {
+        window.removeEventListener('blur', onBlur)
+        window.removeEventListener('focus', onFocus)
+        if (blurTimer) clearTimeout(blurTimer)
+      })
     }
 
     const onKeyDown = (e) => {
-      if (test.f12_disable && e.key === 'F12') {
-        e.preventDefault()
-        e.stopPropagation()
-        toast.error('Developer tools are disabled during this test.')
-      }
       const key = e.key.toLowerCase()
+      if (test.f12_disable) {
+        if (e.key === 'F12' || 
+            ((e.ctrlKey || e.metaKey) && e.shiftKey && (key === 'i' || key === 'j' || key === 'c')) ||
+            ((e.ctrlKey || e.metaKey) && (key === 'u' || key === 's'))) {
+          e.preventDefault()
+          e.stopPropagation()
+          toast.error('Developer tools and source viewing are disabled during this test.')
+        }
+      }
       if (test.copy_paste_disable && (e.ctrlKey || e.metaKey) && key === 'c') {
         e.preventDefault()
         e.stopPropagation()
@@ -163,32 +244,78 @@ export default function TestEnvironment() {
       }
     }
 
-    window.addEventListener('blur', handleBlur)
+    const handleDragOver = (e) => {
+      if (test.copy_paste_disable || test.block_paste) {
+        e.preventDefault()
+      }
+    }
+
+    const handleDrop = (e) => {
+      if (test.copy_paste_disable || test.block_paste) {
+        e.preventDefault()
+        e.stopPropagation()
+        toast.error('Drag and drop is disabled during this test.')
+      }
+    }
+
     document.addEventListener('keydown', onKeyDown, true)
     document.addEventListener('copy', onCopyPaste, true)
     document.addEventListener('paste', onCopyPaste, true)
     document.addEventListener('contextmenu', onContext, true)
+    document.addEventListener('dragover', handleDragOver, true)
+    document.addEventListener('drop', handleDrop, true)
 
     return () => {
-      window.removeEventListener('blur', handleBlur)
+      cleanups.forEach(fn => fn())
       document.removeEventListener('keydown', onKeyDown, true)
       document.removeEventListener('copy', onCopyPaste, true)
       document.removeEventListener('paste', onCopyPaste, true)
       document.removeEventListener('contextmenu', onContext, true)
+      document.removeEventListener('dragover', handleDragOver, true)
+      document.removeEventListener('drop', handleDrop, true)
     }
   }, [test])
 
   // ── Fullscreen ───────────────────────────────────────────────────────────
   useEffect(() => {
-    const handler = () => setIsFullscreen(!!document.fullscreenElement)
+    const handler = () => {
+      const currentlyFullscreen = !!document.fullscreenElement
+      setIsFullscreen(currentlyFullscreen)
+      if (currentlyFullscreen && !timerStarted) {
+        const key = `test_start_${testId}`
+        if (!localStorage.getItem(key)) {
+          localStorage.setItem(key, String(Date.now()))
+        }
+        setTimerStarted(true)
+      }
+    }
     document.addEventListener('fullscreenchange', handler)
     return () => document.removeEventListener('fullscreenchange', handler)
-  }, [])
+  }, [testId, timerStarted])
 
   const toggleFullscreen = () => {
-    if (!document.fullscreenElement) document.documentElement.requestFullscreen?.()
-    else document.exitFullscreen?.()
+    if (!document.fullscreenElement) {
+      document.documentElement.requestFullscreen?.().then(() => {
+        // Event handler starts the timer
+      }).catch(() => {
+        toast.error("Failed to enter fullscreen. Please try again.")
+      })
+    } else {
+      document.exitFullscreen?.()
+    }
   }
+
+  // Auto-enter fullscreen on any click/gesture if required and not in fullscreen
+  useEffect(() => {
+    if (!test?.fullscreen_required) return
+    const handleDocumentClick = () => {
+      if (!document.fullscreenElement) {
+        document.documentElement.requestFullscreen?.().catch(() => {})
+      }
+    }
+    document.addEventListener('click', handleDocumentClick)
+    return () => document.removeEventListener('click', handleDocumentClick)
+  }, [test])
 
   // ── Switch question ──────────────────────────────────────────────────────
   const switchTo = useCallback((newIdx) => {
@@ -230,7 +357,14 @@ export default function TestEnvironment() {
     if (!test) return
     const pid = test.problems[qIdx]?.id
     if (!pid) return
-    if (!window.confirm('Submit your answer for this question?')) return
+    
+    isConfirmingRef.current = true
+    const ok = window.confirm('Submit your answer for this question?')
+    setTimeout(() => {
+      isConfirmingRef.current = false
+    }, 100)
+    
+    if (!ok) return
     setSubmitting(true)
     try {
       const elapsed = startRef.current
@@ -251,6 +385,34 @@ export default function TestEnvironment() {
     }
   }
 
+  // ── Finish Test ───────────────────────────────────────────────────────────
+  const handleFinishTest = async () => {
+    isConfirmingRef.current = true
+    const ok = window.confirm("Are you sure you want to finish and submit the entire test? You won't be able to make any further changes.")
+    setTimeout(() => {
+      isConfirmingRef.current = false
+    }, 100)
+    
+    if (!ok) return
+
+    // Save current problem code
+    const curPid = test.problems[qIdx]?.id
+    if (curPid) {
+      localStorage.setItem(codeKey(testId, curPid), code)
+    }
+
+    // Set test as completed
+    localStorage.setItem(`test_completed_${testId}`, 'true')
+
+    // Clean up fullscreen
+    if (document.fullscreenElement) {
+      document.exitFullscreen?.().catch(() => {})
+    }
+
+    toast.success('Test completed successfully!')
+    navigate('/student/dashboard', { replace: true })
+  }
+
   if (loading) return <PageLoader />
   if (!test)   return null
 
@@ -267,6 +429,17 @@ export default function TestEnvironment() {
         <ShieldCheck size={48} style={{ color: 'var(--d-purple)' }} />
         <p className="text-lg font-semibold">Full-Screen Required</p>
         <p className="text-sm text-t3">This test must be taken in full-screen mode.</p>
+        
+        {/* Countdown Timer on Fullscreen Overlay */}
+        {timerStarted && timeLeft !== null && (
+          <div className={`flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-mono font-bold tabular ${
+            timerWarn ? 'bg-red-100 text-red-600 animate-pulse' : 'bg-beige-pill text-t'
+          }`}>
+            <Clock size={14} />
+            Time Remaining: {fmt(timeLeft)}
+          </div>
+        )}
+
         <button onClick={toggleFullscreen} className="btn-primary">
           <Maximize2 size={16} /> Enter Full Screen
         </button>
@@ -323,6 +496,11 @@ export default function TestEnvironment() {
             <AlertTriangle size={12} /> {tabSwitches}
           </span>
         )}
+
+        {/* Finish Test */}
+        <button onClick={handleFinishTest} className="btn-primary btn-sm flex-shrink-0 bg-red-600 hover:bg-red-700 text-white font-semibold px-3 py-1 h-8 rounded-lg text-xs flex items-center gap-1">
+          Finish Test
+        </button>
 
         {/* Fullscreen */}
         <button onClick={toggleFullscreen} className="btn-ghost p-1.5 flex-shrink-0" title="Toggle fullscreen">

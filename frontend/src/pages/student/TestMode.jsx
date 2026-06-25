@@ -55,19 +55,21 @@ export default function StudentTestMode() {
             const now = new Date()
             const canEnter = !test.end_time || !isPast(new Date(test.end_time))
             const isUpcoming = test.start_time && isFuture(new Date(test.start_time))
-
-            // Check if student completed all questions in this test bundle
-            // (optional status badge/logic can be added here)
+            const isCompleted = localStorage.getItem(`test_completed_${test.id}`) === 'true'
 
             return (
               <div key={test.id} className="card-hover flex flex-col">
                 <div className="flex items-start justify-between mb-2">
                   <h3 className="h3 line-clamp-2 flex-1 pr-2">{test.title}</h3>
-                  {isUpcoming
-                    ? <span className="badge-yellow badge">Upcoming</span>
-                    : canEnter
-                      ? <span className="badge-green badge">Active</span>
-                      : <span className="badge-violet badge">Ended</span>}
+                  {isCompleted ? (
+                    <span className="badge-violet badge">Completed</span>
+                  ) : isUpcoming ? (
+                    <span className="badge-yellow badge">Upcoming</span>
+                  ) : canEnter ? (
+                    <span className="badge-green badge">Active</span>
+                  ) : (
+                    <span className="badge-violet badge">Ended</span>
+                  )}
                 </div>
 
                 {test.description && (
@@ -93,11 +95,23 @@ export default function StudentTestMode() {
                 )}
 
                 <button
-                  onClick={() => canEnter && !isUpcoming && navigate(`/test/${test.id}`)}
-                  disabled={!canEnter || isUpcoming}
-                  className={`mt-auto justify-center text-sm ${canEnter && !isUpcoming ? 'btn-primary' : 'btn-secondary opacity-50 cursor-not-allowed'}`}
+                  onClick={() => canEnter && !isUpcoming && !isCompleted && navigate(`/test/${test.id}`)}
+                  disabled={!canEnter || isUpcoming || isCompleted}
+                  className={`mt-auto justify-center text-sm ${
+                    canEnter && !isUpcoming && !isCompleted 
+                      ? 'btn-primary' 
+                      : 'btn-secondary opacity-50 cursor-not-allowed'
+                  }`}
                 >
-                  {!canEnter ? <><Lock size={13} /> Closed</> : isUpcoming ? <><Clock size={13} /> Upcoming</> : <>Enter Test <ArrowRight size={13} /></>}
+                  {isCompleted ? (
+                    <>Completed</>
+                  ) : !canEnter ? (
+                    <><Lock size={13} /> Closed</>
+                  ) : isUpcoming ? (
+                    <><Clock size={13} /> Upcoming</>
+                  ) : (
+                    <>Enter Test <ArrowRight size={13} /></>
+                  )}
                 </button>
               </div>
             )
