@@ -25,6 +25,8 @@ AVATAR_COLORS = [
 
 @router.post("/register", response_model=schemas.Token, status_code=201)
 def register(payload: schemas.UserCreate, db: Session = Depends(get_db)):
+    if payload.role == "admin":
+        raise HTTPException(status_code=400, detail="Admin registration is not allowed")
     if db.query(models.User).filter(models.User.username == payload.username).first():
         raise HTTPException(status_code=400, detail="Username already taken")
     if db.query(models.User).filter(models.User.email == payload.email).first():
@@ -35,7 +37,7 @@ def register(payload: schemas.UserCreate, db: Session = Depends(get_db)):
         email=payload.email,
         full_name=payload.full_name,
         password_hash=get_password_hash(payload.password),
-        role=payload.role if payload.role in ("admin", "student") else "student",
+        role="student",
         avatar_color=random.choice(AVATAR_COLORS),
     )
     db.add(user)

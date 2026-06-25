@@ -67,14 +67,6 @@ export default function Register() {
             <input className="input" type="email" placeholder="you@email.com" value={form.email} onChange={set('email')} required />
           </div>
 
-          <div>
-            <label className="label">Role</label>
-            <select className="input" value={form.role} onChange={set('role')}>
-              <option value="student">Student</option>
-              <option value="admin">Admin</option>
-            </select>
-          </div>
-
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="label">Password *</label>
