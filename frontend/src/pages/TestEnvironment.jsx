@@ -1,8 +1,8 @@
 /**
- * ExamEnvironment – Multi-question timed exam session for students.
- * Fetches the exam (with all its problems), shows a question navigator,
- * and lets the student solve each problem in the Monaco editor.
- * One shared countdown timer covers the entire exam.
+ * TestEnvironment – Multi-question timed test workspace for students.
+ * Fetches the test (with all its questions), shows a question navigator,
+ * and lets the student solve each question in the Monaco editor.
+ * One shared countdown timer covers the entire test session.
  */
 import { useEffect, useRef, useState, useCallback } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
@@ -30,17 +30,17 @@ function fmt(sec) {
   return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`
 }
 
-function codeKey(examId, problemId) {
-  return `exam_${examId}_prob_${problemId}`
+function codeKey(testId, problemId) {
+  return `test_${testId}_prob_${problemId}`
 }
 
-export default function ExamEnvironment() {
-  const { examId }  = useParams()
+export default function TestEnvironment() {
+  const { testId }  = useParams()
   const navigate    = useNavigate()
   const { isDark }  = useTheme()
   const { user }    = useAuth()
 
-  const [exam, setExam]         = useState(null)
+  const [test, setTest]         = useState(null)
   const [loading, setLoading]   = useState(true)
   const [qIdx, setQIdx]         = useState(0)    // current question index
   const [code, setCode]         = useState(DEFAULT_CODE)
@@ -55,20 +55,20 @@ export default function ExamEnvironment() {
   const [activeTab, setActiveTab]   = useState('statement')
 
   const timerRef  = useRef(null)
-  const startRef  = useRef(null)  // when exam session started (ms)
+  const startRef  = useRef(null)  // when test session started (ms)
 
-  // ── Load exam ───────────────────────────────────────────────────────────
+  // ── Load test ───────────────────────────────────────────────────────────
   useEffect(() => {
-    api.get(`/exams/${examId}`)
+    api.get(`/tests/${testId}`)
       .then(({ data }) => {
-        setExam(data)
+        setTest(data)
         // Restore or initialise code for first question
         const firstPid = data.problems?.[0]?.id
         if (firstPid) {
-          const saved = localStorage.getItem(codeKey(examId, firstPid))
+          const saved = localStorage.getItem(codeKey(testId, firstPid))
           setCode(saved || data.problems[0].starter_code || DEFAULT_CODE)
         }
-        // Fetch prior submissions for each problem in this exam
+        // Fetch prior submissions for each problem in this test
         api.get('/submissions').then(({ data: subs }) => {
           const map = {}
           const pids = new Set((data.problems || []).map(p => p.id))
@@ -82,26 +82,26 @@ export default function ExamEnvironment() {
         }).catch(() => {})
       })
       .catch(() => {
-        toast.error('Exam not found')
+        toast.error('Test not found')
         navigate(-1)
       })
       .finally(() => setLoading(false))
-  }, [examId])
+  }, [testId])
 
   // ── Timer ────────────────────────────────────────────────────────────────
   useEffect(() => {
-    if (!exam?.duration) return
-    const stored = localStorage.getItem(`exam_start_${examId}`)
+    if (!test?.duration) return
+    const stored = localStorage.getItem(`test_start_${testId}`)
     let startMs
     if (stored) {
       startMs = parseInt(stored, 10)
     } else {
       startMs = Date.now()
-      localStorage.setItem(`exam_start_${examId}`, String(startMs))
+      localStorage.setItem(`test_start_${testId}`, String(startMs))
     }
     startRef.current = startMs
 
-    const totalSec = exam.duration * 60
+    const totalSec = test.duration * 60
     const tick = () => {
       const elapsed = Math.floor((Date.now() - startRef.current) / 1000)
       const left = Math.max(0, totalSec - elapsed)
@@ -114,50 +114,50 @@ export default function ExamEnvironment() {
     tick()
     timerRef.current = setInterval(tick, 1000)
     return () => clearInterval(timerRef.current)
-  }, [exam])
+  }, [test])
 
   // ── Proctoring: tab switch & copying/devtools disable ────────────────────
   useEffect(() => {
-    if (!exam) return
+    if (!test) return
 
     const handleBlur = () => {
-      if (exam.tab_switch_detect) {
+      if (test.tab_switch_detect) {
         setTabSwitches(n => n + 1)
       }
     }
 
     const onKeyDown = (e) => {
-      if (exam.f12_disable && e.key === 'F12') {
+      if (test.f12_disable && e.key === 'F12') {
         e.preventDefault()
         e.stopPropagation()
-        toast.error('Developer tools are disabled during this exam.')
+        toast.error('Developer tools are disabled during this test.')
       }
       const key = e.key.toLowerCase()
-      if (exam.copy_paste_disable && (e.ctrlKey || e.metaKey) && key === 'c') {
+      if (test.copy_paste_disable && (e.ctrlKey || e.metaKey) && key === 'c') {
         e.preventDefault()
         e.stopPropagation()
-        toast.error('Copying is disabled during this exam.')
+        toast.error('Copying is disabled during this test.')
       }
-      if ((exam.copy_paste_disable || exam.block_paste) && (e.ctrlKey || e.metaKey) && key === 'v') {
+      if ((test.copy_paste_disable || test.block_paste) && (e.ctrlKey || e.metaKey) && key === 'v') {
         e.preventDefault()
         e.stopPropagation()
-        toast.error('Pasting is disabled during this exam.')
+        toast.error('Pasting is disabled during this test.')
       }
     }
 
     const onCopyPaste = (e) => {
       const blocked = e.type === 'paste'
-        ? (exam.copy_paste_disable || exam.block_paste)
-        : exam.copy_paste_disable
+        ? (test.copy_paste_disable || test.block_paste)
+        : test.copy_paste_disable
       if (blocked) {
         e.preventDefault()
         e.stopPropagation()
-        toast.error(e.type === 'paste' ? 'Pasting is disabled during this exam.' : 'Copying is disabled during this exam.')
+        toast.error(e.type === 'paste' ? 'Pasting is disabled during this test.' : 'Copying is disabled during this test.')
       }
     }
 
     const onContext = (e) => {
-      if (exam.f12_disable) {
+      if (test.f12_disable) {
         e.preventDefault()
         e.stopPropagation()
       }
@@ -176,7 +176,7 @@ export default function ExamEnvironment() {
       document.removeEventListener('paste', onCopyPaste, true)
       document.removeEventListener('contextmenu', onContext, true)
     }
-  }, [exam])
+  }, [test])
 
   // ── Fullscreen ───────────────────────────────────────────────────────────
   useEffect(() => {
@@ -192,23 +192,23 @@ export default function ExamEnvironment() {
 
   // ── Switch question ──────────────────────────────────────────────────────
   const switchTo = useCallback((newIdx) => {
-    if (!exam) return
+    if (!test) return
     // Save current code
-    const curPid = exam.problems[qIdx]?.id
-    if (curPid) localStorage.setItem(codeKey(examId, curPid), code)
+    const curPid = test.problems[qIdx]?.id
+    if (curPid) localStorage.setItem(codeKey(testId, curPid), code)
     // Load new code
-    const newPid = exam.problems[newIdx]?.id
-    const saved  = newPid ? localStorage.getItem(codeKey(examId, newPid)) : null
-    setCode(saved || exam.problems[newIdx]?.starter_code || DEFAULT_CODE)
+    const newPid = test.problems[newIdx]?.id
+    const saved  = newPid ? localStorage.getItem(codeKey(testId, newPid)) : null
+    setCode(saved || test.problems[newIdx]?.starter_code || DEFAULT_CODE)
     setQIdx(newIdx)
     setRunResult(null)
     setActiveTab('statement')
-  }, [exam, qIdx, code, examId])
+  }, [test, qIdx, code, testId])
 
   // ── Run code ─────────────────────────────────────────────────────────────
   const handleRun = async () => {
-    if (!exam) return
-    const pid = exam.problems[qIdx]?.id
+    if (!test) return
+    const pid = test.problems[qIdx]?.id
     if (!pid) return
     setRunning(true)
     setRunResult(null)
@@ -227,8 +227,8 @@ export default function ExamEnvironment() {
 
   // ── Submit ────────────────────────────────────────────────────────────────
   const handleSubmit = async () => {
-    if (!exam) return
-    const pid = exam.problems[qIdx]?.id
+    if (!test) return
+    const pid = test.problems[qIdx]?.id
     if (!pid) return
     if (!window.confirm('Submit your answer for this question?')) return
     setSubmitting(true)
@@ -252,21 +252,21 @@ export default function ExamEnvironment() {
   }
 
   if (loading) return <PageLoader />
-  if (!exam)   return null
+  if (!test)   return null
 
-  const problems   = exam.problems || []
+  const problems   = test.problems || []
   const curProblem = problems[qIdx]
   const curSub     = curProblem ? submissions[curProblem.id] : null
   const timerWarn  = timeLeft != null && timeLeft < 300 // < 5 min
 
   // ── Proctoring: fullscreen required ─────────────────────────────────────
-  if (exam.fullscreen_required && !isFullscreen) {
+  if (test.fullscreen_required && !isFullscreen) {
     return (
       <div className="flex flex-col items-center justify-center h-screen gap-4"
         style={{ background: 'var(--bg)' }}>
         <ShieldCheck size={48} style={{ color: 'var(--d-purple)' }} />
         <p className="text-lg font-semibold">Full-Screen Required</p>
-        <p className="text-sm text-t3">This exam must be taken in full-screen mode.</p>
+        <p className="text-sm text-t3">This test must be taken in full-screen mode.</p>
         <button onClick={toggleFullscreen} className="btn-primary">
           <Maximize2 size={16} /> Enter Full Screen
         </button>
@@ -281,9 +281,9 @@ export default function ExamEnvironment() {
       <div className="flex items-center gap-3 px-4 h-12 border-b border-line flex-shrink-0"
         style={{ background: 'var(--s)' }}>
 
-        {/* Exam title */}
+        {/* Test title */}
         <BookOpen size={16} className="text-t4 flex-shrink-0" />
-        <span className="font-semibold text-sm truncate max-w-[200px]">{exam.title}</span>
+        <span className="font-semibold text-sm truncate max-w-[200px]">{test.title}</span>
 
         {/* Question tabs */}
         <div className="flex gap-1 overflow-x-auto flex-1 mx-2">
@@ -318,7 +318,7 @@ export default function ExamEnvironment() {
         </div>
 
         {/* Tab switches */}
-        {exam.tab_switch_detect && tabSwitches > 0 && (
+        {test.tab_switch_detect && tabSwitches > 0 && (
           <span className="text-xs text-warn flex items-center gap-1 flex-shrink-0">
             <AlertTriangle size={12} /> {tabSwitches}
           </span>
@@ -458,32 +458,32 @@ export default function ExamEnvironment() {
           <div className="flex items-center gap-2 px-4 py-2.5 border-t border-line flex-shrink-0"
             style={{ background: 'var(--s)' }}>
 
-            {/* Navigation */}
-            <button onClick={() => qIdx > 0 && switchTo(qIdx - 1)}
-              disabled={qIdx === 0} className="btn-secondary btn-sm gap-1 disabled:opacity-40">
-              <ChevronLeft size={14} /> Prev
-            </button>
-            <button onClick={() => qIdx < problems.length - 1 && switchTo(qIdx + 1)}
-              disabled={qIdx === problems.length - 1} className="btn-secondary btn-sm gap-1 disabled:opacity-40">
-              Next <ChevronRight size={14} />
-            </button>
+          {/* Navigation */}
+          <button onClick={() => qIdx > 0 && switchTo(qIdx - 1)}
+            disabled={qIdx === 0} className="btn-secondary btn-sm gap-1 disabled:opacity-40">
+            <ChevronLeft size={14} /> Prev
+          </button>
+          <button onClick={() => qIdx < problems.length - 1 && switchTo(qIdx + 1)}
+            disabled={qIdx === problems.length - 1} className="btn-secondary btn-sm gap-1 disabled:opacity-40">
+            Next <ChevronRight size={14} />
+          </button>
 
-            <span className="text-xs text-t4 ml-1">Q{qIdx + 1}/{problems.length}</span>
+          <span className="text-xs text-t4 ml-1">Q{qIdx + 1}/{problems.length}</span>
 
-            <div className="flex-1" />
+          <div className="flex-1" />
 
-            {/* Run */}
-            <button onClick={handleRun} disabled={running || submitting} className="btn-secondary gap-1">
-              <Play size={14} /> {running ? 'Running…' : 'Run'}
-            </button>
+          {/* Run */}
+          <button onClick={handleRun} disabled={running || submitting} className="btn-secondary gap-1">
+            <Play size={14} /> {running ? 'Running…' : 'Run'}
+          </button>
 
-            {/* Submit */}
-            <button onClick={handleSubmit} disabled={submitting || running} className="btn-primary gap-1">
-              <Send size={14} /> {submitting ? 'Submitting…' : 'Submit Q' + (qIdx + 1)}
-            </button>
-          </div>
+          {/* Submit */}
+          <button onClick={handleSubmit} disabled={submitting || running} className="btn-primary gap-1">
+            <Send size={14} /> {submitting ? 'Submitting…' : 'Submit Q' + (qIdx + 1)}
+          </button>
         </div>
       </div>
     </div>
+  </div>
   )
 }

@@ -203,11 +203,11 @@ for p_data in PROBLEMS:
     print(f"  [+] {p_data['title']}")
     added += 1
 
-# ── Create the Exam ────────────────────────────────────────────────────────
+# ── Create the Test Assessment ─────────────────────────────────────────────
 exam_title = "Python String Test"
 exam = db.query(Exam).filter(Exam.title == exam_title).first()
 if exam:
-    print(f"\nExam '{exam_title}' already exists. Re-linking problems...")
+    print(f"\nTest Assessment '{exam_title}' already exists. Re-linking problems...")
 else:
     exam = Exam(
         title=exam_title,
@@ -227,9 +227,9 @@ else:
     )
     db.add(exam)
     db.flush()
-    print(f"\n[+] Created Exam: {exam_title}")
+    print(f"\n[+] Created Test Assessment: {exam_title}")
 
-# Re-link the 4 problems to the exam in order
+# Re-link the 4 problems to the test in order
 db.query(ExamProblem).filter(ExamProblem.exam_id == exam.id).delete()
 # Get the problem IDs
 db_probs = db.query(Problem).filter(Problem.title.in_([p["title"] for p in PROBLEMS])).all()
@@ -243,4 +243,4 @@ for i, p_data in enumerate(PROBLEMS):
 
 db.commit()
 db.close()
-print("\n=> Done! Added", added, "new test problem(s) and exam.")
+print("\n=> Done! Added", added, "new test problem(s) and test assessment.")

@@ -1,4 +1,4 @@
-"""Exams – multi-question timed test sessions."""
+"""Tests – multi-question timed test sessions."""
 import datetime
 from typing import List, Optional
 
@@ -15,7 +15,7 @@ router = APIRouter()
 
 # ── Pydantic schemas ──────────────────────────────────────────────────────
 
-class ExamCreate(BaseModel):
+class TestCreate(BaseModel):
     title: str
     description: Optional[str] = None
     duration: Optional[int] = 90          # minutes
@@ -32,13 +32,13 @@ class ExamCreate(BaseModel):
     block_paste:          bool = False
 
 
-class ExamActiveUpdate(BaseModel):
+class TestActiveUpdate(BaseModel):
     is_active: bool
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────
 
-def _exam_dict(exam: models.Exam, include_problems: bool = False) -> dict:
+def _test_dict(exam: models.Exam, include_problems: bool = False) -> dict:
     d = {
         "id":                   exam.id,
         "title":                exam.title,
@@ -73,7 +73,6 @@ def _exam_dict(exam: models.Exam, include_problems: bool = False) -> dict:
                         "input_data":      tc.input_data,
                         "is_hidden":       tc.is_hidden,
                         "order_index":     tc.order_index,
-                        # hide expected output for hidden cases (student view handled by caller)
                     }
                     for tc in sorted(ep.problem.test_cases, key=lambda t: t.order_index)
                 ],
@@ -86,8 +85,8 @@ def _exam_dict(exam: models.Exam, include_problems: bool = False) -> dict:
 # ── Create ────────────────────────────────────────────────────────────────
 
 @router.post("", status_code=201)
-def create_exam(
-    payload: ExamCreate,
+def create_test(
+    payload: TestCreate,
     db: Session = Depends(get_db),
     admin=Depends(get_admin_user),
 ):
@@ -118,13 +117,13 @@ def create_exam(
 
     db.commit()
     db.refresh(exam)
-    return _exam_dict(exam)
+    return _test_dict(exam)
 
 
 # ── List ──────────────────────────────────────────────────────────────────
 
 @router.get("")
-def list_exams(
+def list_tests(
     include_inactive: bool = False,
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user),
@@ -133,21 +132,21 @@ def list_exams(
     if not (include_inactive and current_user.role == "admin"):
         query = query.filter(models.Exam.is_active == True)
     exams = query.order_by(models.Exam.created_at.desc()).all()
-    return [_exam_dict(e) for e in exams]
+    return [_test_dict(e) for e in exams]
 
 
 # ── Get single ────────────────────────────────────────────────────────────
 
-@router.get("/{exam_id}")
-def get_exam(
-    exam_id: int,
+@router.get("/{test_id}")
+def get_test(
+    test_id: int,
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user),
 ):
-    exam = db.query(models.Exam).filter(models.Exam.id == exam_id).first()
+    exam = db.query(models.Exam).filter(models.Exam.id == test_id).first()
     if not exam:
-        raise HTTPException(404, "Exam not found")
-    data = _exam_dict(exam, include_problems=True)
+        raise HTTPException(404, "Test not found")
+    data = _test_dict(exam, include_problems=True)
 
     # For students: strip expected_output from hidden test cases
     if current_user.role != "admin":
@@ -173,16 +172,16 @@ def get_exam(
 
 # ── Update ────────────────────────────────────────────────────────────────
 
-@router.put("/{exam_id}")
-def update_exam(
-    exam_id: int,
-    payload: ExamCreate,
+@router.put("/{test_id}")
+def update_test(
+    test_id: int,
+    payload: TestCreate,
     db: Session = Depends(get_db),
     _admin=Depends(get_admin_user),
 ):
-    exam = db.query(models.Exam).filter(models.Exam.id == exam_id).first()
+    exam = db.query(models.Exam).filter(models.Exam.id == test_id).first()
     if not exam:
-        raise HTTPException(404, "Exam not found")
+        raise HTTPException(404, "Test not found")
 
     for field in (
         "title", "description", "duration", "start_time", "end_time", "is_for_all",
@@ -192,7 +191,7 @@ def update_exam(
         setattr(exam, field, getattr(payload, field))
 
     # Replace problem links
-    db.query(models.ExamProblem).filter(models.ExamProblem.exam_id == exam_id).delete()
+    db.query(models.ExamProblem).filter(models.ExamProblem.exam_id == test_id).delete()
     for i, pid in enumerate(payload.problem_ids):
         p = db.query(models.Problem).filter(models.Problem.id == pid).first()
         if not p:
@@ -202,38 +201,38 @@ def update_exam(
 
     db.commit()
     db.refresh(exam)
-    return _exam_dict(exam)
+    return _test_dict(exam)
 
 
 # ── Toggle active ─────────────────────────────────────────────────────────
 
-@router.patch("/{exam_id}/active")
+@router.patch("/{test_id}/active")
 def set_active(
-    exam_id: int,
-    payload: ExamActiveUpdate,
+    test_id: int,
+    payload: TestActiveUpdate,
     db: Session = Depends(get_db),
     _admin=Depends(get_admin_user),
 ):
-    exam = db.query(models.Exam).filter(models.Exam.id == exam_id).first()
+    exam = db.query(models.Exam).filter(models.Exam.id == test_id).first()
     if not exam:
-        raise HTTPException(404, "Exam not found")
+        raise HTTPException(404, "Test not found")
     exam.is_active = payload.is_active
     db.commit()
     db.refresh(exam)
-    return _exam_dict(exam)
+    return _test_dict(exam)
 
 
 # ── Delete ────────────────────────────────────────────────────────────────
 
-@router.delete("/{exam_id}")
-def delete_exam(
-    exam_id: int,
+@router.delete("/{test_id}")
+def delete_test(
+    test_id: int,
     db: Session = Depends(get_db),
     _admin=Depends(get_admin_user),
 ):
-    exam = db.query(models.Exam).filter(models.Exam.id == exam_id).first()
+    exam = db.query(models.Exam).filter(models.Exam.id == test_id).first()
     if not exam:
-        raise HTTPException(404, "Exam not found")
+        raise HTTPException(404, "Test not found")
     db.delete(exam)
     db.commit()
     return {"detail": "Deleted"}

@@ -7,7 +7,6 @@ import Layout   from './components/Layout'
 
 import AdminDashboard  from './pages/admin/Dashboard'
 import AdminTest       from './pages/admin/TestMode'
-import AdminExams      from './pages/admin/Exams'
 import AdminReports    from './pages/admin/Reports'
 import AdminSystem     from './pages/admin/System'
 import AdminStudents   from './pages/admin/Students'
@@ -20,7 +19,7 @@ import StudentTest      from './pages/student/TestMode'
 import StudentReports   from './pages/student/Reports'
 
 import CodingEnvironment from './pages/CodingEnvironment'
-import ExamEnvironment   from './pages/ExamEnvironment'
+import TestEnvironment   from './pages/TestEnvironment'
 
 function RequireAuth({ children, role }) {
   const { user, loading } = useAuth()
@@ -44,7 +43,6 @@ export default function App() {
         <Route index element={<Navigate to="dashboard" replace />} />
         <Route path="dashboard" element={<AdminDashboard />} />
         <Route path="tests"     element={<AdminTest />} />
-        <Route path="exams"     element={<AdminExams />} />
         <Route path="live"      element={<AdminLiveTests />} />
         <Route path="students"  element={<AdminStudents />} />
         <Route path="profile"   element={<Profile />} />
@@ -66,8 +64,8 @@ export default function App() {
       {/* Coding environment (single problem) */}
       <Route path="/code/:problemId" element={<RequireAuth><CodingEnvironment /></RequireAuth>} />
 
-      {/* Exam environment (multi-question) */}
-      <Route path="/exam/:examId" element={<RequireAuth><ExamEnvironment /></RequireAuth>} />
+      {/* Test environment (multi-question) */}
+      <Route path="/test/:testId" element={<RequireAuth><TestEnvironment /></RequireAuth>} />
 
       {/* Default redirect */}
       <Route path="/" element={

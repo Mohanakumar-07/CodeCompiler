@@ -11,7 +11,6 @@ const adminNav = [
   { to: '/admin/dashboard', icon: LayoutDashboard, label: 'Dashboard' },
   { to: '/admin/students',  icon: Users,           label: 'Students' },
   { to: '/admin/tests',     icon: FlaskConical,    label: 'Tests' },
-  { to: '/admin/exams',     icon: BookOpen,        label: 'Exams' },
   { to: '/admin/live',      icon: Radio,           label: 'Live Tests' },
   { to: '/admin/reports',   icon: BarChart3,       label: 'Reports' },
   { to: '/admin/analytics', icon: LineChart,       label: 'Analytics' },

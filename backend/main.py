@@ -8,8 +8,8 @@ from fastapi.staticfiles import StaticFiles
 import monitoring
 from database import Base, engine
 from routers import (
-    admin, ai_router, analytics, auth, exams, problems, reports,
-    students, submissions,
+    admin, ai_router, analytics, auth, problems, reports,
+    students, submissions, tests,
 )
 
 monitoring.install_log_capture()
@@ -165,7 +165,7 @@ app.include_router(reports.router,     prefix="/api/reports",     tags=["Reports
 app.include_router(students.router,    prefix="/api/students",    tags=["Students"])
 app.include_router(ai_router.router,   prefix="/api/ai",          tags=["AI"])
 app.include_router(analytics.router,   prefix="/api/analytics",   tags=["Analytics"])
-app.include_router(exams.router,       prefix="/api/exams",        tags=["Exams"])
+app.include_router(tests.router,       prefix="/api/tests",        tags=["Tests"])
 
 
 @app.get("/api/health/runtimes")
