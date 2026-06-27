@@ -71,6 +71,7 @@ def _test_dict(exam: models.Exam, include_problems: bool = False) -> dict:
                     {
                         "id":              tc.id,
                         "input_data":      tc.input_data,
+                        "expected_output":  tc.expected_output,
                         "is_hidden":       tc.is_hidden,
                         "order_index":     tc.order_index,
                     }

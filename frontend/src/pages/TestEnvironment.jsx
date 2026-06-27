@@ -82,6 +82,53 @@ export default function TestEnvironment() {
     }
   }, [tabSwitches, testId])
 
+  // Auto-submit the entire test (called on violation limit exceeded)
+  const triggerAutoSubmit = useCallback(async () => {
+    if (!test) return
+
+    // Save current problem code to localStorage
+    const curPid = test.problems[qIdx]?.id
+    if (curPid) {
+      localStorage.setItem(codeKey(testId, curPid), code)
+      
+      // Also attempt to silently submit the current problem to backend
+      try {
+        const elapsed = startRef.current
+          ? Math.floor((Date.now() - startRef.current) / 1000)
+          : 0
+        await api.post('/submissions', {
+          problem_id: curPid,
+          code,
+          language: LANG,
+          time_taken: elapsed,
+          tab_switches: tabSwitches,
+        })
+      } catch (e) {
+        console.error("Auto-submission of current problem failed:", e)
+      }
+    }
+
+    // Set test as completed
+    localStorage.setItem(`test_completed_${testId}`, 'true')
+
+    // Clean up fullscreen
+    if (document.fullscreenElement) {
+      try {
+        await document.exitFullscreen()
+      } catch (e) {}
+    }
+
+    toast.error('Test auto-submitted due to excessive proctoring violations (10+).', { duration: 8000 })
+    navigate('/student/dashboard', { replace: true })
+  }, [test, qIdx, testId, code, tabSwitches, navigate])
+
+  // Watch for violation limit
+  useEffect(() => {
+    if (tabSwitches >= 10 && test) {
+      triggerAutoSubmit()
+    }
+  }, [tabSwitches, test, triggerAutoSubmit])
+
   // ── Load test ───────────────────────────────────────────────────────────
   useEffect(() => {
     if (localStorage.getItem(`test_completed_${testId}`) === 'true') {
@@ -425,7 +472,7 @@ export default function TestEnvironment() {
   if (test.fullscreen_required && !isFullscreen) {
     return (
       <div className="flex flex-col items-center justify-center h-screen gap-4"
-        style={{ background: 'var(--bg)' }}>
+        style={{ background: 'var(--beige-pg)' }}>
         <ShieldCheck size={48} style={{ color: 'var(--d-purple)' }} />
         <p className="text-lg font-semibold">Full-Screen Required</p>
         <p className="text-sm text-t3">This test must be taken in full-screen mode.</p>
@@ -448,7 +495,7 @@ export default function TestEnvironment() {
   }
 
   return (
-    <div className="flex flex-col h-screen overflow-hidden" style={{ background: 'var(--bg)' }}>
+    <div className="flex flex-col h-screen overflow-hidden" style={{ background: 'var(--beige-pg)' }}>
 
       {/* ── Top bar ─────────────────────────────────────────────────────── */}
       <div className="flex items-center gap-3 px-4 h-12 border-b border-line flex-shrink-0"
@@ -492,8 +539,10 @@ export default function TestEnvironment() {
 
         {/* Tab switches */}
         {test.tab_switch_detect && tabSwitches > 0 && (
-          <span className="text-xs text-warn flex items-center gap-1 flex-shrink-0">
-            <AlertTriangle size={12} /> {tabSwitches}
+          <span className={`text-xs flex items-center gap-1 flex-shrink-0 font-bold ${
+            tabSwitches >= 8 ? 'text-err animate-pulse' : 'text-warn'
+          }`}>
+            <AlertTriangle size={12} /> {tabSwitches}/10
           </span>
         )}
 
@@ -526,7 +575,7 @@ export default function TestEnvironment() {
           </div>
 
           {/* Content */}
-          <div className="flex-1 overflow-y-auto px-4 py-4" style={{ background: 'var(--bg)' }}>
+          <div className="flex-1 overflow-y-auto px-4 py-4" style={{ background: 'var(--beige-pg)' }}>
             {activeTab === 'statement' && curProblem && (
               <div>
                 <div className="flex items-center gap-2 mb-3">
@@ -537,27 +586,27 @@ export default function TestEnvironment() {
                   {curSub && <StatusBadge status={curSub.status} />}
                 </div>
                 <h2 className="text-base font-bold mb-3">{curProblem.title}</h2>
-                <Markdown className="text-sm text-t2 leading-relaxed">
-                  {curProblem.description}
-                </Markdown>
+                <Markdown text={curProblem.description} />
 
                 {/* Sample test cases */}
                 {(curProblem.test_cases || [])
                   .filter(tc => !tc.is_hidden)
                   .map((tc, i) => (
-                    <div key={i} className="mt-3 rounded-lg border border-line p-3"
+                    <div key={i} className="mt-4 rounded-xl border border-line p-4 space-y-3"
                       style={{ background: 'var(--s)' }}>
-                      <p className="text-xs font-semibold text-t4 mb-1">Sample {i + 1}</p>
-                      {tc.input_data && (
-                        <div className="mb-1">
-                          <span className="text-[10px] text-t4">Input:</span>
-                          <pre className="text-xs font-mono mt-0.5 whitespace-pre-wrap">{tc.input_data}</pre>
+                      <p className="text-xs font-bold text-brand uppercase tracking-wider">Sample {i + 1}</p>
+                      
+                      {tc.input_data != null && (
+                        <div className="flex flex-col gap-1">
+                          <span className="text-[10px] font-semibold text-t3 uppercase tracking-wider">Input</span>
+                          <pre className="text-xs font-mono bg-beige-pill p-2 rounded-md border border-line whitespace-pre-wrap text-t2 font-medium">{tc.input_data}</pre>
                         </div>
                       )}
+                      
                       {tc.expected_output != null && (
-                        <div>
-                          <span className="text-[10px] text-t4">Output:</span>
-                          <pre className="text-xs font-mono mt-0.5 whitespace-pre-wrap">{tc.expected_output}</pre>
+                        <div className="flex flex-col gap-1">
+                          <span className="text-[10px] font-semibold text-t3 uppercase tracking-wider">Expected Output</span>
+                          <pre className="text-xs font-mono bg-beige-pill p-2 rounded-md border border-line whitespace-pre-wrap text-t2 font-medium">{tc.expected_output}</pre>
                         </div>
                       )}
                     </div>
