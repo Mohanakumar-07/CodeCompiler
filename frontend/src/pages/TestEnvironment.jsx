@@ -69,6 +69,12 @@ export default function TestEnvironment() {
   const [runResult, setRunResult]   = useState(null)
   const [submissions, setSubmissions] = useState({}) // { problemId: submission }
   const [activeTab, setActiveTab]   = useState('statement')
+  const [confirmModal, setConfirmModal] = useState({
+    isOpen: false,
+    title: '',
+    message: '',
+    onConfirm: null,
+  })
 
   const timerRef  = useRef(null)
   const startRef  = useRef(null)  // when test session started (ms)
@@ -405,59 +411,58 @@ export default function TestEnvironment() {
     const pid = test.problems[qIdx]?.id
     if (!pid) return
     
-    isConfirmingRef.current = true
-    const ok = window.confirm('Submit your answer for this question?')
-    setTimeout(() => {
-      isConfirmingRef.current = false
-    }, 100)
-    
-    if (!ok) return
-    setSubmitting(true)
-    try {
-      const elapsed = startRef.current
-        ? Math.floor((Date.now() - startRef.current) / 1000)
-        : 0
-      const { data } = await api.post('/submissions', {
-        problem_id: pid, code, language: LANG,
-        time_taken: elapsed, tab_switches: tabSwitches,
-      })
-      setSubmissions(s => ({ ...s, [pid]: data }))
-      toast.success(`Q${qIdx + 1} submitted! Score: ${data.score}%`)
-      setRunResult(data)
-      setActiveTab('output')
-    } catch (err) {
-      toast.error(err.response?.data?.detail || 'Submission failed')
-    } finally {
-      setSubmitting(false)
-    }
+    setConfirmModal({
+      isOpen: true,
+      title: 'Submit Answer',
+      message: `Are you sure you want to submit your answer for Question ${qIdx + 1}? This will grade your code against all test cases and record your score.`,
+      onConfirm: async () => {
+        setSubmitting(true)
+        try {
+          const elapsed = startRef.current
+            ? Math.floor((Date.now() - startRef.current) / 1000)
+            : 0
+          const { data } = await api.post('/submissions', {
+            problem_id: pid, code, language: LANG,
+            time_taken: elapsed, tab_switches: tabSwitches,
+          })
+          setSubmissions(s => ({ ...s, [pid]: data }))
+          toast.success(`Q${qIdx + 1} submitted! Score: ${data.score}%`)
+          setRunResult(data)
+          setActiveTab('output')
+        } catch (err) {
+          toast.error(err.response?.data?.detail || 'Submission failed')
+        } finally {
+          setSubmitting(false)
+        }
+      }
+    })
   }
 
   // ── Finish Test ───────────────────────────────────────────────────────────
   const handleFinishTest = async () => {
-    isConfirmingRef.current = true
-    const ok = window.confirm("Are you sure you want to finish and submit the entire test? You won't be able to make any further changes.")
-    setTimeout(() => {
-      isConfirmingRef.current = false
-    }, 100)
-    
-    if (!ok) return
+    setConfirmModal({
+      isOpen: true,
+      title: 'Finish Test Assessment',
+      message: "Are you sure you want to finish and submit the entire test? You won't be able to make any further changes.",
+      onConfirm: async () => {
+        // Save current problem code
+        const curPid = test.problems[qIdx]?.id
+        if (curPid) {
+          localStorage.setItem(codeKey(testId, curPid), code)
+        }
 
-    // Save current problem code
-    const curPid = test.problems[qIdx]?.id
-    if (curPid) {
-      localStorage.setItem(codeKey(testId, curPid), code)
-    }
+        // Set test as completed
+        localStorage.setItem(`test_completed_${testId}`, 'true')
 
-    // Set test as completed
-    localStorage.setItem(`test_completed_${testId}`, 'true')
+        // Clean up fullscreen
+        if (document.fullscreenElement) {
+          document.exitFullscreen?.().catch(() => {})
+        }
 
-    // Clean up fullscreen
-    if (document.fullscreenElement) {
-      document.exitFullscreen?.().catch(() => {})
-    }
-
-    toast.success('Test completed successfully!')
-    navigate('/student/dashboard', { replace: true })
+        toast.success('Test completed successfully!')
+        navigate('/student/dashboard', { replace: true })
+      }
+    })
   }
 
   if (loading) return <PageLoader />
@@ -711,6 +716,34 @@ export default function TestEnvironment() {
         </div>
       </div>
     </div>
+
+    {/* Custom Confirmation Modal */}
+    {confirmModal.isOpen && (
+      <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+        <div className="w-full max-w-sm rounded-xl border border-line p-5 shadow-lg animate-fade-in"
+          style={{ background: 'var(--s)' }}>
+          <h3 className="text-sm font-bold text-t mb-2">{confirmModal.title}</h3>
+          <p className="text-xs text-t2 mb-5 leading-relaxed">{confirmModal.message}</p>
+          <div className="flex justify-end gap-2">
+            <button
+              onClick={() => setConfirmModal({ isOpen: false, title: '', message: '', onConfirm: null })}
+              className="btn-secondary btn-sm"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={() => {
+                confirmModal.onConfirm?.()
+                setConfirmModal({ isOpen: false, title: '', message: '', onConfirm: null })
+              }}
+              className="btn-primary btn-sm bg-brand-solid hover:bg-brand text-white font-semibold px-3 py-1 h-8 rounded-lg text-xs"
+            >
+              Confirm
+            </button>
+          </div>
+        </div>
+      </div>
+    )}
   </div>
   )
 }
