@@ -3,6 +3,7 @@
  * Fetches the test (with all its questions), shows a question navigator,
  * and lets the student solve each question in the Monaco editor.
  * One shared countdown timer covers the entire test session.
+ * Updated to use custom React modals to prevent exiting fullscreen mode.
  */
 import { useEffect, useRef, useState, useCallback } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
