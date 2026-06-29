@@ -302,3 +302,182 @@ def admin_student_detail(user_id: int, db: Session = Depends(get_db), _admin=Dep
         "email": u.email, "avatar_color": u.avatar_color,
     }
     return payload
+
+
+@router.get("/leaderboard")
+def get_leaderboard(
+    test_id: Optional[int] = None,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user),
+):
+    from collections import defaultdict
+    now = datetime.datetime.utcnow()
+    seven_days_ago = now - datetime.timedelta(days=7)
+
+    # 1. Fetch active tests within the 7-day span (for the dropdown list)
+    active_tests = (
+        db.query(models.Exam)
+        .filter(models.Exam.is_active == True, models.Exam.created_at >= seven_days_ago)
+        .order_by(models.Exam.created_at.desc())
+        .all()
+    )
+    test_list = [{"id": e.id, "title": e.title} for e in active_tests]
+
+    rankings = []
+
+    if test_id:
+        # Specific Test Leaderboard
+        exam = db.query(models.Exam).filter(models.Exam.id == test_id).first()
+        if not exam:
+            raise HTTPException(status_code=404, detail="Test not found")
+
+        problem_ids = [ep.problem_id for ep in exam.problems]
+        if not problem_ids:
+            return {"tests": test_list, "rankings": []}
+
+        # Query all submissions for the problems in this test
+        submissions = (
+            db.query(models.Submission)
+            .filter(models.Submission.problem_id.in_(problem_ids))
+            .all()
+        )
+
+        student_best = defaultdict(dict)  # { user_id: { problem_id: Submission } }
+        for sub in submissions:
+            uid = sub.user_id
+            pid = sub.problem_id
+            existing = student_best[uid].get(pid)
+            if not existing:
+                student_best[uid][pid] = sub
+            else:
+                if sub.score > existing.score:
+                    student_best[uid][pid] = sub
+                elif sub.score == existing.score:
+                    sub_time = sub.time_taken or 999999
+                    ext_time = existing.time_taken or 999999
+                    if sub_time < ext_time:
+                        student_best[uid][pid] = sub
+
+        user_ids = list(student_best.keys())
+        users = db.query(models.User).filter(models.User.id.in_(user_ids), models.User.role == "student").all()
+        user_map = {u.id: u for u in users}
+
+        for uid, probs in student_best.items():
+            user = user_map.get(uid)
+            if not user:
+                continue
+
+            total_score = 0.0
+            total_time = 0
+            total_violations = 0
+
+            for pid in problem_ids:
+                sub = probs.get(pid)
+                if sub:
+                    total_score += (sub.score or 0.0)
+                    total_time += (sub.time_taken or 0)
+                    total_violations += (sub.tab_switches or 0)
+
+            avg_score = round(total_score / len(problem_ids), 2)
+
+            rankings.append({
+                "user_id": user.id,
+                "username": user.username,
+                "full_name": user.full_name or user.username,
+                "score": avg_score,
+                "time_taken": total_time,
+                "violations": total_violations,
+            })
+    else:
+        # Overall Leaderboard (across all active tests)
+        exams = db.query(models.Exam).filter(models.Exam.is_active == True).all()
+        if not exams:
+            return {"tests": test_list, "rankings": []}
+
+        problem_to_exam = {}
+        exam_problem_count = defaultdict(int)
+        for exam in exams:
+            for ep in exam.problems:
+                problem_to_exam[ep.problem_id] = exam.id
+                exam_problem_count[exam.id] += 1
+
+        all_prob_ids = list(problem_to_exam.keys())
+        if not all_prob_ids:
+            return {"tests": test_list, "rankings": []}
+
+        submissions = (
+            db.query(models.Submission)
+            .filter(models.Submission.problem_id.in_(all_prob_ids))
+            .all()
+        )
+
+        student_best_overall = defaultdict(dict)  # { user_id: { problem_id: Submission } }
+        for sub in submissions:
+            uid = sub.user_id
+            pid = sub.problem_id
+            existing = student_best_overall[uid].get(pid)
+            if not existing:
+                student_best_overall[uid][pid] = sub
+            else:
+                if sub.score > existing.score:
+                    student_best_overall[uid][pid] = sub
+                elif sub.score == existing.score:
+                    sub_time = sub.time_taken or 999999
+                    ext_time = existing.time_taken or 999999
+                    if sub_time < ext_time:
+                        student_best_overall[uid][pid] = sub
+
+        user_ids = list(student_best_overall.keys())
+        users = db.query(models.User).filter(models.User.id.in_(user_ids), models.User.role == "student").all()
+        user_map = {u.id: u for u in users}
+
+        for uid, probs in student_best_overall.items():
+            user = user_map.get(uid)
+            if not user:
+                continue
+
+            exam_scores = defaultdict(float)
+            exam_times = defaultdict(int)
+            exam_violations = defaultdict(int)
+            exam_attempted = set()
+
+            for pid, sub in probs.items():
+                eid = problem_to_exam.get(pid)
+                if eid:
+                    exam_scores[eid] += (sub.score or 0.0)
+                    exam_times[eid] += (sub.time_taken or 0)
+                    exam_violations[eid] += (sub.tab_switches or 0)
+                    exam_attempted.add(eid)
+
+            if not exam_attempted:
+                continue
+
+            total_exam_score = 0.0
+            total_time = 0
+            total_violations = 0
+            for eid in exam_attempted:
+                num_probs = exam_problem_count[eid] or 1
+                total_exam_score += (exam_scores[eid] / num_probs)
+                total_time += exam_times[eid]
+                total_violations += exam_violations[eid]
+
+            overall_avg = round(total_exam_score / len(exam_attempted), 2)
+
+            rankings.append({
+                "user_id": user.id,
+                "username": user.username,
+                "full_name": user.full_name or user.username,
+                "score": overall_avg,
+                "time_taken": total_time,
+                "violations": total_violations,
+            })
+
+    # Sort rankings: score desc, time asc, violations asc, name asc
+    rankings.sort(key=lambda x: (-x["score"], x["time_taken"], x["violations"], x["username"]))
+
+    # Assign ranks
+    for i, r in enumerate(rankings):
+        r["rank"] = i + 1
+
+    return {"tests": test_list, "rankings": rankings}
+

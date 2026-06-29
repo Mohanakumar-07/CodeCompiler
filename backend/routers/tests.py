@@ -66,6 +66,8 @@ def _test_dict(exam: models.Exam, include_problems: bool = False) -> dict:
                 "topics":      ep.problem.topics,
                 "difficulty":  ep.problem.difficulty,
                 "starter_code":ep.problem.starter_code,
+                "starter_code_map":ep.problem.starter_code_map,
+                "allowed_languages":ep.problem.allowed_languages,
                 "order_index": ep.order_index,
                 "test_cases": [
                     {
@@ -132,6 +134,9 @@ def list_tests(
     query = db.query(models.Exam)
     if not (include_inactive and current_user.role == "admin"):
         query = query.filter(models.Exam.is_active == True)
+        if current_user.role != "admin":
+            seven_days_ago = datetime.datetime.utcnow() - datetime.timedelta(days=7)
+            query = query.filter(models.Exam.created_at >= seven_days_ago)
     exams = query.order_by(models.Exam.created_at.desc()).all()
     return [_test_dict(e) for e in exams]
 

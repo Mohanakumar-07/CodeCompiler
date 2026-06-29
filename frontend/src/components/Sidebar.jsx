@@ -2,26 +2,28 @@ import { NavLink, useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import {
   LayoutDashboard, FlaskConical,
-  BarChart3, LogOut, X, LineChart, Activity, Users, Radio, BookOpen,
+  BarChart3, LogOut, X, LineChart, Activity, Users, Radio, BookOpen, Trophy,
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 import Logo from './ui/Logo'
 
 const adminNav = [
-  { to: '/admin/dashboard', icon: LayoutDashboard, label: 'Dashboard' },
-  { to: '/admin/students',  icon: Users,           label: 'Students' },
-  { to: '/admin/tests',     icon: FlaskConical,    label: 'Tests' },
-  { to: '/admin/live',      icon: Radio,           label: 'Live Tests' },
-  { to: '/admin/reports',   icon: BarChart3,       label: 'Reports' },
-  { to: '/admin/analytics', icon: LineChart,       label: 'Analytics' },
-  { to: '/admin/system',    icon: Activity,        label: 'System' },
+  { to: '/admin/dashboard',   icon: LayoutDashboard, label: 'Dashboard' },
+  { to: '/admin/students',    icon: Users,           label: 'Students' },
+  { to: '/admin/tests',       icon: FlaskConical,    label: 'Tests' },
+  { to: '/admin/live',        icon: Radio,           label: 'Live Tests' },
+  { to: '/admin/reports',     icon: BarChart3,       label: 'Reports' },
+  { to: '/admin/analytics',   icon: LineChart,       label: 'Analytics' },
+  { to: '/admin/leaderboard', icon: Trophy,          label: 'Leaderboard' },
+  { to: '/admin/system',      icon: Activity,        label: 'System' },
 ]
 
 const studentNav = [
-  { to: '/student/dashboard', icon: LayoutDashboard, label: 'Dashboard' },
-  { to: '/student/tests',     icon: FlaskConical,    label: 'Tests' },
-  { to: '/student/reports',   icon: BarChart3,       label: 'Reports' },
-  { to: '/student/analytics', icon: LineChart,       label: 'Analytics' },
+  { to: '/student/dashboard',   icon: LayoutDashboard, label: 'Dashboard' },
+  { to: '/student/tests',       icon: FlaskConical,    label: 'Tests' },
+  { to: '/student/reports',     icon: BarChart3,       label: 'Reports' },
+  { to: '/student/analytics',   icon: LineChart,       label: 'Analytics' },
+  { to: '/student/leaderboard', icon: Trophy,          label: 'Leaderboard' },
 ]
 
 export default function Sidebar({ open, onClose }) {

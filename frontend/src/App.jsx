@@ -13,6 +13,7 @@ import AdminStudents   from './pages/admin/Students'
 import AdminLiveTests  from './pages/admin/LiveTests'
 import Analytics       from './pages/Analytics'
 import Profile         from './pages/Profile'
+import Leaderboard     from './pages/Leaderboard'
 
 import StudentDashboard from './pages/student/Dashboard'
 import StudentTest      from './pages/student/TestMode'
@@ -48,6 +49,7 @@ export default function App() {
         <Route path="profile"   element={<Profile />} />
         <Route path="analytics" element={<Analytics />} />
         <Route path="reports"   element={<AdminReports />} />
+        <Route path="leaderboard" element={<Leaderboard />} />
         <Route path="system"    element={<AdminSystem />} />
       </Route>
 
@@ -59,6 +61,7 @@ export default function App() {
         <Route path="tests"     element={<StudentTest />} />
         <Route path="analytics" element={<Analytics />} />
         <Route path="reports"   element={<StudentReports />} />
+        <Route path="leaderboard" element={<Leaderboard />} />
       </Route>
 
       {/* Coding environment (single problem) */}

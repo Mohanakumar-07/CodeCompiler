@@ -22,17 +22,43 @@ import { useAuth } from '../context/AuthContext'
 import Markdown from '../components/ui/Markdown'
 
 const DEFAULT_CODE = `# Write your solution here\n`
-const LANG = 'python'
+
+const LANGUAGES = ['python', 'c', 'cpp', 'java']
+const LANG_LABELS = { python: 'Python', c: 'C', cpp: 'C++', java: 'Java' }
+const LANG_MONACO = { python: 'python', c: 'c', cpp: 'cpp', java: 'java' }
+const LANG_DOT = { python: 'var(--info)', c: 'var(--brand)', cpp: 'var(--d-purple)', java: 'var(--warn)' }
+const LANG_TEMPLATES = {
+  python: `# Write your solution here\n`,
+  c: `#include <stdio.h>\n\nint main(void) {\n    // Write your solution here\n    return 0;\n}\n`,
+  cpp: `#include <bits/stdc++.h>\nusing namespace std;\n\nint main() {\n    // Write your solution here\n    return 0;\n}\n`,
+  java: `import java.util.*;\n\npublic class Main {\n    public static void main(String[] args) {\n        Scanner sc = new Scanner(System.in);\n        // Write your solution here\n    }\n}\n`,
+}
+
+function allowedLangsFor(problem) {
+  const a = problem?.allowed_languages
+  return Array.isArray(a) && a.length ? a.filter((l) => LANGUAGES.includes(l)) : LANGUAGES
+}
+
+function starterFor(problem, lang) {
+  const map = problem?.starter_code_map
+  if (map && map[lang] && map[lang].trim()) return map[lang]
+  if (lang === 'python' && problem?.starter_code && problem.starter_code.trim()) return problem.starter_code
+  return LANG_TEMPLATES[lang] || ''
+}
+
+function codeKey(testId, problemId, lang) {
+  return `test_${testId}_prob_${problemId}_${lang}`
+}
+
+function langKey(testId, problemId) {
+  return `test_${testId}_prob_${problemId}_lang`
+}
 
 function fmt(sec) {
   if (sec == null) return '--:--'
   const m = Math.floor(sec / 60)
   const s = sec % 60
   return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`
-}
-
-function codeKey(testId, problemId) {
-  return `test_${testId}_prob_${problemId}`
 }
 
 export default function TestEnvironment() {
@@ -46,6 +72,7 @@ export default function TestEnvironment() {
   const [test, setTest]         = useState(null)
   const [loading, setLoading]   = useState(true)
   const [qIdx, setQIdx]         = useState(0)    // current question index
+  const [language, setLanguage] = useState('python')
   const [code, setCode]         = useState(DEFAULT_CODE)
   const [timeLeft, setTimeLeft] = useState(null) // seconds
   const [timerStarted, setTimerStarted] = useState(() => {
@@ -96,7 +123,8 @@ export default function TestEnvironment() {
     // Save current problem code to localStorage
     const curPid = test.problems[qIdx]?.id
     if (curPid) {
-      localStorage.setItem(codeKey(testId, curPid), code)
+      localStorage.setItem(codeKey(testId, curPid, language), code)
+      localStorage.setItem(langKey(testId, curPid), language)
       
       // Also attempt to silently submit the current problem to backend
       try {
@@ -106,7 +134,7 @@ export default function TestEnvironment() {
         await api.post('/submissions', {
           problem_id: curPid,
           code,
-          language: LANG,
+          language,
           time_taken: elapsed,
           tab_switches: tabSwitches,
         })
@@ -125,13 +153,13 @@ export default function TestEnvironment() {
       } catch (e) {}
     }
 
-    toast.error('Test auto-submitted due to excessive proctoring violations (10+).', { duration: 8000 })
+    toast.error('Test auto-submitted due to excessive proctoring violations (5+).', { duration: 8000 })
     navigate('/student/dashboard', { replace: true })
-  }, [test, qIdx, testId, code, tabSwitches, navigate])
+  }, [test, qIdx, testId, code, language, tabSwitches, navigate])
 
   // Watch for violation limit
   useEffect(() => {
-    if (tabSwitches >= 10 && test) {
+    if (tabSwitches >= 5 && test) {
       triggerAutoSubmit()
     }
   }, [tabSwitches, test, triggerAutoSubmit])
@@ -162,8 +190,12 @@ export default function TestEnvironment() {
         // Restore or initialise code for first question
         const firstPid = data.problems?.[0]?.id
         if (firstPid) {
-          const saved = localStorage.getItem(codeKey(testId, firstPid))
-          setCode(saved || data.problems[0].starter_code || DEFAULT_CODE)
+          const allowedLangs = allowedLangsFor(data.problems[0])
+          const savedLang = localStorage.getItem(langKey(testId, firstPid))
+          const activeLang = (savedLang && allowedLangs.includes(savedLang)) ? savedLang : allowedLangs[0] || 'python'
+          setLanguage(activeLang)
+          const saved = localStorage.getItem(codeKey(testId, firstPid, activeLang))
+          setCode(saved || starterFor(data.problems[0], activeLang))
         }
         // Fetch prior submissions for each problem in this test
         api.get('/submissions').then(({ data: subs }) => {
@@ -376,15 +408,41 @@ export default function TestEnvironment() {
     if (!test) return
     // Save current code
     const curPid = test.problems[qIdx]?.id
-    if (curPid) localStorage.setItem(codeKey(testId, curPid), code)
+    if (curPid) {
+      localStorage.setItem(codeKey(testId, curPid, language), code)
+      localStorage.setItem(langKey(testId, curPid), language)
+    }
     // Load new code
     const newPid = test.problems[newIdx]?.id
-    const saved  = newPid ? localStorage.getItem(codeKey(testId, newPid)) : null
-    setCode(saved || test.problems[newIdx]?.starter_code || DEFAULT_CODE)
+    if (newPid) {
+      const allowedLangs = allowedLangsFor(test.problems[newIdx])
+      const savedLang = localStorage.getItem(langKey(testId, newPid))
+      const activeLang = (savedLang && allowedLangs.includes(savedLang)) ? savedLang : allowedLangs[0] || 'python'
+      setLanguage(activeLang)
+      const saved = localStorage.getItem(codeKey(testId, newPid, activeLang))
+      setCode(saved || starterFor(test.problems[newIdx], activeLang))
+    }
     setQIdx(newIdx)
     setRunResult(null)
     setActiveTab('statement')
-  }, [test, qIdx, code, testId])
+  }, [test, qIdx, code, language, testId])
+
+  const changeLanguage = (lang) => {
+    if (!test) return
+    const pid = test.problems[qIdx]?.id
+    if (!pid) return
+    if (lang === language) return
+
+    // Save current code draft
+    localStorage.setItem(codeKey(testId, pid, language), code)
+    // Save selected language
+    localStorage.setItem(langKey(testId, pid), lang)
+
+    // Load new language code draft or starter
+    const saved = localStorage.getItem(codeKey(testId, pid, lang))
+    setLanguage(lang)
+    setCode(saved && saved.trim() ? saved : starterFor(test.problems[qIdx], lang))
+  }
 
   // ── Run code ─────────────────────────────────────────────────────────────
   const handleRun = async () => {
@@ -395,10 +453,36 @@ export default function TestEnvironment() {
     setRunResult(null)
     setActiveTab('output')
     try {
-      const { data } = await api.post('/submissions/run', {
-        problem_id: pid, code, language: LANG,
+      const currentProblem = test.problems[qIdx]
+      const publicCases = currentProblem?.test_cases?.filter(tc => !tc.is_hidden) || []
+      const cases = publicCases.map(tc => ({
+        id: tc.id,
+        input_data: tc.input_data,
+        expected_output: tc.expected_output,
+      }))
+      const { data } = await api.post('/submissions/run-samples', {
+        code,
+        language,
+        cases,
       })
-      setRunResult(data)
+      if (data.status === 'Compilation Error') {
+        setRunResult({
+          status: 'Compilation Error',
+          error: data.error,
+          results: [],
+        })
+      } else {
+        const mappedResults = data.results.map(r => ({
+          status: r.run_status !== 'ok' ? r.run_status : (r.passed ? 'Passed' : 'Failed'),
+          actual_output: r.run_status !== 'ok' ? (r.run_status + (r.actual ? '\n' + r.actual : '')) : r.actual,
+          is_hidden: false,
+        }))
+        setRunResult({
+          status: 'ok',
+          results: mappedResults,
+          score: null,
+        })
+      }
     } catch (err) {
       toast.error(err.response?.data?.detail || 'Run failed')
     } finally {
@@ -423,7 +507,7 @@ export default function TestEnvironment() {
             ? Math.floor((Date.now() - startRef.current) / 1000)
             : 0
           const { data } = await api.post('/submissions', {
-            problem_id: pid, code, language: LANG,
+            problem_id: pid, code, language,
             time_taken: elapsed, tab_switches: tabSwitches,
           })
           setSubmissions(s => ({ ...s, [pid]: data }))
@@ -449,7 +533,8 @@ export default function TestEnvironment() {
         // Save current problem code
         const curPid = test.problems[qIdx]?.id
         if (curPid) {
-          localStorage.setItem(codeKey(testId, curPid), code)
+          localStorage.setItem(codeKey(testId, curPid, language), code)
+          localStorage.setItem(langKey(testId, curPid), language)
         }
 
         // Set test as completed
@@ -638,6 +723,19 @@ export default function TestEnvironment() {
                         <span className="text-xs text-t4">Score: {runResult.score}%</span>
                       )}
                     </div>
+                    {/* Overall Error (Compilation/Runtime Error / Timeout / etc) */}
+                    {(runResult.status === 'Compilation Error' || runResult.status === 'Runtime Error' || runResult.status === 'Time Limit Exceeded') && (runResult.error || runResult.output) && (
+                      <pre
+                        className="text-xs font-mono border rounded-lg p-3 overflow-x-auto whitespace-pre-wrap mt-2"
+                        style={{
+                          color: 'var(--err)',
+                          background: 'color-mix(in srgb, var(--err) 5%, transparent)',
+                          borderColor: 'color-mix(in srgb, var(--err) 20%, transparent)',
+                        }}
+                      >
+                        {runResult.error || runResult.output}
+                      </pre>
+                    )}
                     {/* Per-case results */}
                     {(runResult.results || []).map((r, i) => (
                       <div key={i} className={`rounded-lg border p-3 ${
@@ -667,11 +765,29 @@ export default function TestEnvironment() {
 
         {/* Right: Editor */}
         <div className="flex-1 flex flex-col min-w-0">
+          {/* Editor Header */}
+          <div className="flex items-center justify-between px-3 h-10 border-b border-line bg-surface-h flex-shrink-0">
+            <div className="flex items-center gap-2">
+              <div className="flex items-center gap-1.5">
+                <span className="w-2 h-2 rounded-full inline-block" style={{ background: LANG_DOT[language] || 'var(--info)' }} />
+                <select
+                  value={language}
+                  onChange={(e) => changeLanguage(e.target.value)}
+                  title="Choose language"
+                  className="text-xs font-medium text-t2 bg-transparent border border-line rounded-md px-1.5 py-0.5 cursor-pointer hover:border-line-strong focus:outline-none"
+                >
+                  {allowedLangsFor(test?.problems?.[qIdx]).map((l) => (
+                    <option key={l} value={l}>{LANG_LABELS[l]}</option>
+                  ))}
+                </select>
+              </div>
+            </div>
+          </div>
           {/* Editor */}
           <div className="flex-1 min-h-0">
             <Editor
               height="100%"
-              language="python"
+              language={LANG_MONACO[language] || 'python'}
               value={code}
               onChange={v => setCode(v || '')}
               theme={isDark ? 'vs-dark' : 'light'}

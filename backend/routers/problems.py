@@ -38,6 +38,8 @@ def _problem_dict(p: models.Problem) -> dict:
         "fullscreen_required": p.fullscreen_required,
         "window_switch_detect": p.window_switch_detect,
         "block_paste": p.block_paste,
+        "starter_code_map": p.starter_code_map,
+        "allowed_languages": p.allowed_languages,
         "test_cases_count": len(p.test_cases),
     }
 
@@ -68,6 +70,8 @@ def create_problem(
         fullscreen_required=payload.fullscreen_required,
         window_switch_detect=payload.window_switch_detect,
         block_paste=payload.block_paste,
+        starter_code_map=payload.starter_code_map,
+        allowed_languages=payload.allowed_languages,
     )
     db.add(problem)
     db.flush()
@@ -169,7 +173,7 @@ def update_problem(
         "title", "description", "topics", "starter_code", "mode", "difficulty",
         "start_time", "end_time", "duration", "is_for_all",
         "tab_switch_detect", "copy_paste_disable", "f12_disable", "fullscreen_required",
-        "window_switch_detect", "block_paste",
+        "window_switch_detect", "block_paste", "starter_code_map", "allowed_languages",
     ):
         setattr(p, field, getattr(payload, field))
 

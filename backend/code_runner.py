@@ -192,6 +192,7 @@ def compile_code(code: str, language: str, tmpdir: str,
 # ──────────────────────────── Run one ──────────────────────────────────────
 
 def run_once(run_argv, input_data: str = "", time_limit: float = 5.0) -> Dict:
+    input_data = input_data or ""
     """Run a prepared command (argv list) with stdin. Returns {status, output, time_ms, mem_kb}.
 
     For backwards-compatibility, if ``run_argv`` is a string it is treated as a
@@ -295,8 +296,8 @@ def judge_submission(code: str, language: str, test_cases: List[Dict], time_limi
 
         results, passed, max_time = [], 0, 0.0
         for tc in test_cases:
-            run = run_once(run_argv, tc.get("input_data", ""), time_limit)
-            expected = _normalize(tc.get("expected_output", ""))
+            run = run_once(run_argv, tc.get("input_data") or "", time_limit)
+            expected = _normalize(tc.get("expected_output") or "")
             actual = run["output"]
             tc_status = run["status"]
             if tc_status == "ok":
